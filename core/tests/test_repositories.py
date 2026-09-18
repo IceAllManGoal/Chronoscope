@@ -350,7 +350,12 @@ class TestProcessInstanceLookup:
         found = event_repository.find_process_instance(
             boot_id=BOOT_ID, pid=4312, before=started + timedelta(minutes=5)
         )
-        assert found == parent_instance
+        assert found is not None
+        assert found.id == parent_instance
+        # Имя берётся из события старта родителя: в событиях запуска потомка
+        # приходит только parent_pid, поэтому иначе имя было бы неизвестно.
+        assert found.name == "pid4312.exe"
+        assert found.type == "process"
 
     def test_returns_none_without_boot_id(self, event_repository) -> None:
         """Без boot session PID может совпасть с процессом прошлой загрузки.
@@ -410,4 +415,5 @@ class TestProcessInstanceLookup:
         found = event_repository.find_process_instance(
             boot_id=BOOT_ID, pid=4312, before=base + timedelta(minutes=20)
         )
-        assert found == newer
+        assert found is not None
+        assert found.id == newer

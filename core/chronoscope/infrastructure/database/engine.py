@@ -78,3 +78,21 @@ def create_database_engine(settings: CoreSettings) -> Engine:
 
     _apply_pragmas(engine, settings.busy_timeout_ms)
     return engine
+
+
+def missing_tables(engine: Engine) -> frozenset[str]:
+    """Перечислить ожидаемые таблицы, которых нет в базе.
+
+    Приложение не применяет миграции автоматически: §81 (инвариант 11) требует
+    менять схему только через миграции, а неявное изменение схемы при старте
+    процесса — это ровно тот случай, когда «удобно» расходится с предсказуемостью.
+    Вместо этого Core проверяет схему и сообщает, что нужно сделать.
+
+    Пустое множество означает, что схема на месте.
+    """
+    from sqlalchemy import inspect
+
+    from chronoscope.infrastructure.database.models import metadata
+
+    existing = set(inspect(engine).get_table_names())
+    return frozenset(metadata.tables) - existing

@@ -71,6 +71,16 @@ def is_ulid(value: str) -> bool:
     return all(char in _ALPHABET_INDEX for char in value)
 
 
+def prefixed_id_pattern(prefix: str) -> str:
+    """Регулярное выражение для идентификатора вида ``<prefix>_<ULID>``.
+
+    Используется транспортными схемами API, чтобы проверка формы совпадала с
+    ``pattern`` в ``shared/schemas/*.schema.json`` и выводилась из того же
+    алфавита, а не дублировалась руками.
+    """
+    return rf"^{prefix}_{ULID_CHAR_CLASS}{{{ULID_LENGTH}}}$"
+
+
 def ulid_from(*, timestamp_ms: int, random_bits: int) -> str:
     """Собрать ULID из готовых частей.
 

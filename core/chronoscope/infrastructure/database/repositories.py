@@ -25,7 +25,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from chronoscope.domain.errors import InvalidInputError, StorageError
 from chronoscope.domain.events.entity_ref import EntityRef
 from chronoscope.domain.events.event import Event
-from chronoscope.domain.events.event_type import PROCESS_STARTED
+from chronoscope.domain.events.event_type import ENTITY_PROCESS, PROCESS_STARTED
 from chronoscope.domain.events.raw_event import RawEvent
 from chronoscope.domain.timestamps import format_utc_fixed, parse_utc
 from chronoscope.infrastructure.database.models import (
@@ -359,7 +359,7 @@ class EventRepository:
         boot_id: str | None,
         pid: int,
         before: datetime,
-    ) -> str | None:
+    ) -> EntityRef | None:
         """Найти экземпляр процесса по PID в пределах boot session (§14, §20).
 
         Нужен нормализатору, чтобы заполнить ``actor`` события
@@ -367,6 +367,12 @@ class EventRepository:
         это ``process_instance_id``, который выводится из времени старта
         родителя. Времени старта у нас нет, поэтому родителя приходится искать
         среди уже сохранённых событий.
+
+        Возвращается готовая ссылка на сущность вместе с именем: имя родителя
+        в событиях запуска не приходит, но оно уже сохранено в событии старта
+        родителя. Читать его оттуда — это использование известного факта, а не
+        догадка, и без него UI не смог бы показать цепочку
+        ``explorer.exe → notepad.exe`` (§20) без второго запроса.
 
         Если ``boot_id`` неизвестен, поиск **не выполняется**. PID без boot
         session может совпасть с процессом предыдущей загрузки, и тогда
@@ -378,7 +384,7 @@ class EventRepository:
         pid_value = func.json_extract(events.c.attributes_json, ATTRIBUTE_PID_PATH)
 
         statement = (
-            select(events.c.subject_id)
+            select(events.c.subject_id, events.c.subject_name)
             .where(
                 and_(
                     events.c.type == PROCESS_STARTED,
@@ -394,6 +400,11 @@ class EventRepository:
 
         try:
             with self._engine.connect() as connection:
-                return connection.execute(statement).scalar_one_or_none()
+                row = connection.execute(statement).one_or_none()
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось найти экземпляр процесса: {exc}") from exc
+
+        if row is None:
+            return None
+
+        return EntityRef(ENTITY_PROCESS, row.subject_id, row.subject_name)

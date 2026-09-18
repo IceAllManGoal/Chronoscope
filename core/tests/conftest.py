@@ -91,9 +91,13 @@ def engine(temp_settings: CoreSettings):  # noqa: ANN201 - тип Engine из SQ
         database_engine.dispose()
 
 
-@pytest.fixture
-def migrated_engine(temp_settings: CoreSettings):  # noqa: ANN201
-    """Engine с базой, к которой применены миграции Alembic."""
+def upgrade_to_head() -> None:
+    """Применить миграции по тем настройкам, что видит окружение.
+
+    Приложение не применяет миграции само (инвариант 11), поэтому тесты,
+    которым нужна рабочая схема, делают это явно — ровно тем же способом,
+    что описан в README для разработчика.
+    """
     from alembic import command
     from alembic.config import Config
 
@@ -102,7 +106,17 @@ def migrated_engine(temp_settings: CoreSettings):  # noqa: ANN201
     alembic_config.set_main_option("prepend_sys_path", str(CORE_DIR))
     command.upgrade(alembic_config, "head")
 
-    database_engine = create_database_engine(temp_settings)
+
+@pytest.fixture
+def migrated_database(temp_settings: CoreSettings) -> CoreSettings:
+    """Настройки с базой, к которой применены миграции."""
+    upgrade_to_head()
+    return temp_settings
+
+
+@pytest.fixture
+def migrated_engine(migrated_database: CoreSettings):  # noqa: ANN201
+    database_engine = create_database_engine(migrated_database)
     try:
         yield database_engine
     finally:

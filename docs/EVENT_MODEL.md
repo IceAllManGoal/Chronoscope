@@ -119,7 +119,7 @@ performance.sampled   update.installed      incident.marked
 ```json
 {
   "type": "process",
-  "id": "proc_01K5R8Z9M1C2D3E4F5G6H7J8K9",
+  "id": "proc_01M2T1R61M8W1EMS4WBMRDKSTZ",
   "name": "notepad.exe"
 }
 ```
@@ -192,12 +192,12 @@ installer.exe → C:\Program Files\...   процесс создал файл
   "boot_id": "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA",
   "actor": {
     "type": "process",
-    "id": "proc_01K5R8Z9M0A1B2C3D4E5F6G7H8",
+    "id": "proc_01M2SZAT80WBG97HT3GY4XRGRK",
     "name": "explorer.exe"
   },
   "subject": {
     "type": "process",
-    "id": "proc_01K5R8Z9M1C2D3E4F5G6H7J8K9",
+    "id": "proc_01M2T1R61M8W1EMS4WBMRDKSTZ",
     "name": "notepad.exe"
   },
   "attributes": {
@@ -265,6 +265,17 @@ installer.exe → C:\Program Files\...   процесс создал файл
 `process_started_at` нужен, чтобы из события выхода получить тот же `process_instance_id`, что и из события старта. Если источника нет, нормализатор использует `source_timestamp`. Если и его нет — `process_instance_id` вывести невозможно; событие всё равно сохраняется, а неудача фиксируется в логах (§60: одно плохое событие не останавливает pipeline).
 
 **Открытый вопрос на будущее:** при появлении второго источника процессных событий эти формы стоит вынести в `shared/schemas/payloads/` и проверять контрактно, чтобы Agent и Core не разошлись в именах полей.
+
+### Атрибуты, которые добавляет нормализатор
+
+Нормализованное событие содержит не буквальную копию payload, а результат его переработки. Помимо переименования `path` → `executable` (терминология источника → терминология Chronoscope), нормализатор добавляет два атрибута, которых в payload нет:
+
+| Атрибут | Зачем |
+|---|---|
+| `process_started_at` | Время старта экземпляра процесса. Из него выводится `process_instance_id` (§2.4), поэтому он нужен и человеку, разбирающему инцидент, и любой последующей аналитике |
+| `parent_resolved` | Показывает, удалось ли связать событие с родительским процессом. Различает «родителя не было» (`parent_pid` отсутствует) и «родитель был, но его старт не наблюдался» (`parent_resolved: false`). Без этого признака пустой `actor` выглядел бы как отсутствие данных |
+
+`parent_resolved` появляется только тогда, когда в payload есть `parent_pid`.
 
 ## 9. Приватность на уровне модели
 

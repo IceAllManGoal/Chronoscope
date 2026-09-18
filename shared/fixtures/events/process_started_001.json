@@ -9,12 +9,12 @@
   "boot_id": "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA",
   "actor": {
     "type": "process",
-    "id": "proc_01K5R8Z9M0A1B2C3D4E5F6G7H8",
+    "id": "proc_01M2SZAT80WBG97HT3GY4XRGRK",
     "name": "explorer.exe"
   },
   "subject": {
     "type": "process",
-    "id": "proc_01K5R8Z9M1C2D3E4F5G6H7J8K9",
+    "id": "proc_01M2T1R61M8W1EMS4WBMRDKSTZ",
     "name": "notepad.exe"
   },
   "attributes": {
@@ -22,7 +22,9 @@
     "parent_pid": 4312,
     "executable": "C:\\Windows\\System32\\notepad.exe",
     "command_line": "notepad.exe",
-    "user_sid": "S-1-5-21-1000000000-2000000000-3000000000-1001"
+    "user_sid": "S-1-5-21-1000000000-2000000000-3000000000-1001",
+    "process_started_at": "2026-09-18T10:42:15.220Z",
+    "parent_resolved": true
   },
   "raw_event_id": "raw_01K5R8Z9M5P8W3X7Y2C4E6G8J0",
   "trace_id": null,

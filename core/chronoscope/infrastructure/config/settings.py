@@ -69,13 +69,26 @@ class CoreSettings:
 
 
 def _read_toml(path: Path) -> dict[str, Any]:
+    """Прочитать TOML, допуская BOM в начале файла.
+
+    Формально TOML — это UTF-8 без BOM, но Windows PowerShell 5.1, «Блокнот» и
+    часть редакторов записывают BOM по умолчанию. Chronoscope — Windows-first
+    инструмент (ADR-0006), и падение на BOM означало бы, что конфигурация,
+    сохранённая штатными средствами системы, не читается. BOM при этом не
+    создаёт двусмысленности, в отличие, например, от наивного времени, поэтому
+    он отбрасывается, а не служит поводом для отказа.
+    """
     try:
-        with path.open("rb") as handle:
-            return tomllib.load(handle)
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigurationError(f"не удалось разобрать {path}: {exc}") from exc
+        document = path.read_text(encoding="utf-8-sig")
     except OSError as exc:
         raise ConfigurationError(f"не удалось прочитать {path}: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise ConfigurationError(f"{path} не является текстовым файлом в UTF-8: {exc}") from exc
+
+    try:
+        return tomllib.loads(document)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigurationError(f"не удалось разобрать {path}: {exc}") from exc
 
 
 def _reject_unknown_keys(section: str, values: dict[str, Any]) -> None:
