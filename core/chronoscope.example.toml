@@ -1,0 +1,39 @@
+# Пример конфигурации Chronoscope Core (§36).
+#
+# Скопируй в chronoscope.toml в каталоге запуска Core либо укажи путь
+# переменной окружения CHRONOSCOPE_CONFIG. Все значения ниже — значения
+# по умолчанию, то есть файл можно не создавать вовсе.
+#
+# Секции [agent], [collectors.*] и [privacy] описывают Agent и живут в его
+# конфигурации. Core их игнорирует, поэтому единый файл на весь проект тоже
+# допустим — неизвестные секции просто пропускаются. Неизвестные ключи
+# внутри [core] и [storage] отвергаются как опечатки.
+
+[core]
+# Только loopback. Любой другой адрес отвергается на уровне конфигурации:
+# API обязан слушать 127.0.0.1, а не 0.0.0.0 (§33, ADR-0007).
+host = "127.0.0.1"
+port = 7342
+log_level = "INFO"
+# Лимит размера запроса (§33). Батч из 1000 событий обычно укладывается
+# в единицы мегабайт.
+max_request_bytes = 5242880
+
+[storage]
+database_path = "./data/chronoscope.db"
+# how long SQLite waits for a write lock before failing (§25)
+busy_timeout_ms = 5000
+
+# ── Пример единого файла вместе с Agent (Core эти секции игнорирует) ──
+#
+# [agent]
+# batch_size = 50
+# flush_interval_ms = 500
+#
+# [collectors.process]
+# enabled = true
+# capture_command_line = true
+# capture_user = true
+#
+# [privacy]
+# redact_command_line_patterns = []
