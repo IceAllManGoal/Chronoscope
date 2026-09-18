@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "evt_01K5R8Z9M9S2Y7Z1A6E8G0J2K4",
+  "timestamp": "2026-09-18T10:44:03.114Z",
+  "observed_at": "2026-09-18T10:44:03.170Z",
+  "type": "process.exited",
+  "source": "windows.process",
+  "host_id": "host_01K5R8Z9M4Q7T2V6X1B3D5F7H9",
+  "boot_id": "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA",
+  "actor": {
+    "type": "process",
+    "id": "proc_01K5R8Z9M0A1B2C3D4E5F6G7H8",
+    "name": "explorer.exe"
+  },
+  "subject": {
+    "type": "process",
+    "id": "proc_01K5R8Z9M1C2D3E4F5G6H7J8K9",
+    "name": "notepad.exe"
+  },
+  "attributes": {
+    "pid": 9812,
+    "parent_pid": 4312,
+    "executable": "C:\\Windows\\System32\\notepad.exe",
+    "exit_code": 0
+  },
+  "raw_event_id": "raw_01K5R8Z9M6N9V4Z8A3D5F7H9K1",
+  "trace_id": null,
+  "tags": []
+}

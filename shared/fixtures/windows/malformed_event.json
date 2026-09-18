@@ -1,0 +1,9 @@
+{
+  "schema_version": 99,
+  "event_id": "01K5R8Z9M7P0W5X9Y4C6E8G0J2",
+  "collector": "Windows.Process",
+  "observed_at": "2026-09-18T15:42:15+05:00",
+  "host_id": "desktop-abc",
+  "payload_type": "process_start",
+  "payload": "not-an-object"
+}

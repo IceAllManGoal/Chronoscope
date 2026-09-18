@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "raw_event_id": "raw_01K5R8Z9M5P8W3X7Y2C4E6G8J0",
+  "collector": "windows.process",
+  "collector_version": "0.0.1",
+  "observed_at": "2026-09-18T10:42:15.281Z",
+  "source_timestamp": "2026-09-18T10:42:15.220Z",
+  "host_id": "host_01K5R8Z9M4Q7T2V6X1B3D5F7H9",
+  "boot_id": "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA",
+  "payload_type": "process_start",
+  "payload": {
+    "pid": 9812,
+    "parent_pid": 4312,
+    "name": "notepad.exe",
+    "path": "C:\\Windows\\System32\\notepad.exe",
+    "command_line": "notepad.exe",
+    "user_sid": "S-1-5-21-1000000000-2000000000-3000000000-1001",
+    "process_started_at": "2026-09-18T10:42:15.220Z"
+  }
+}

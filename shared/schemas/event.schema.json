@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/IceAllManGoal/Chronoscope/main/shared/schemas/event.schema.json",
+  "title": "Chronoscope Event v1",
+  "description": "Нормализованное событие — центральная сущность Chronoscope (§13 PROJECT_SPEC). Исторически неизменяемо: дополнительное знание хранится отдельно как enrichment, correlation и analytics result (§21).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "timestamp",
+    "type",
+    "source",
+    "host_id",
+    "attributes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "Версия схемы нормализованного события (§52)."
+    },
+    "id": {
+      "$ref": "#/$defs/event_id",
+      "description": "Идентификатор нормализованного события. Именно он используется в GET /api/v1/events/{event_id} (§31)."
+    },
+    "timestamp": {
+      "$ref": "#/$defs/timestamp_utc",
+      "description": "Время, к которому событие относится по смыслу. Обычно source_timestamp сырого события (§24)."
+    },
+    "observed_at": {
+      "oneOf": [
+        { "$ref": "#/$defs/timestamp_utc" },
+        { "type": "null" }
+      ],
+      "description": "Когда Chronoscope увидел событие. Null допустим для синтетических событий, не порождённых коллектором, например incident.marked (§42)."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+      "maxLength": 128,
+      "description": "Тип события в lowercase dot notation по правилу <domain>.<past-tense-action> (§18).",
+      "examples": [
+        "process.started",
+        "process.exited",
+        "system.booted",
+        "incident.marked"
+      ]
+    },
+    "source": {
+      "$ref": "#/$defs/collector_name",
+      "description": "Источник, из которого событие получено. Для нормализованных событий совпадает с collector сырого события."
+    },
+    "host_id": {
+      "$ref": "#/$defs/host_id"
+    },
+    "boot_id": {
+      "oneOf": [
+        { "$ref": "#/$defs/boot_id" },
+        { "type": "null" }
+      ],
+      "description": "Идентификатор загрузки ОС, в рамках которой произошло событие (§16)."
+    },
+    "actor": {
+      "oneOf": [
+        { "$ref": "#/$defs/entity_ref" },
+        { "type": "null" }
+      ],
+      "description": "Сущность, инициировавшая действие: explorer.exe -> notepad.exe (§20). Null, если инициатор неизвестен или событие не имеет актора."
+    },
+    "subject": {
+      "oneOf": [
+        { "$ref": "#/$defs/entity_ref" },
+        { "type": "null" }
+      ],
+      "description": "Сущность, над которой произошло действие (§20). Null, если действие не направлено на конкретную сущность."
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Domain-specific атрибуты события. Хранятся как JSON, потому что набор event types быстро меняется и разные domains имеют разные структуры (§28)."
+    },
+    "raw_event_id": {
+      "oneOf": [
+        { "$ref": "#/$defs/raw_event_id" },
+        { "type": "null" }
+      ],
+      "description": "Ссылка на сырое событие, из которого получено нормализованное (§11, §29). Null для событий, не имеющих raw-источника, например incident.marked."
+    },
+    "trace_id": {
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 128 },
+        { "type": "null" }
+      ],
+      "description": "Зарезервировано под будущую корреляцию. В 0.0.1 всегда null (§13)."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_.-]*$",
+        "maxLength": 64
+      },
+      "uniqueItems": true,
+      "default": [],
+      "description": "Пользовательские или аналитические метки. Не влияют на исторический смысл события (§21)."
+    }
+  },
+  "$defs": {
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$",
+      "description": "RFC 3339 в UTC (§24)."
+    },
+    "collector_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$",
+      "maxLength": 128,
+      "description": "Источник в lowercase dot notation."
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+      "description": "Префикс evt_ плюс ULID или UUIDv7 (§17)."
+    },
+    "raw_event_id": {
+      "type": "string",
+      "pattern": "^raw_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+      "description": "Префикс raw_ плюс ULID или UUIDv7; та же форма, что в raw-event.schema.json."
+    },
+    "host_id": {
+      "type": "string",
+      "pattern": "^host_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+      "description": "Префикс host_ плюс ULID или UUIDv7 (§15)."
+    },
+    "boot_id": {
+      "type": "string",
+      "pattern": "^boot_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+      "description": "Префикс boot_ плюс ULID или UUIDv7 (§16)."
+    },
+    "entity_ref": {
+      "type": "object",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "description": "Ссылка на сущность, участвующую в событии (§19).",
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "maxLength": 64,
+          "description": "Тип сущности. Намеренно не enum: добавление нового типа сущности не должно требовать новой версии схемы. Известные типы перечислены в §19: process, file, network_endpoint, dns_name, service, driver, registry_key, application, user, host, device, container, repository, game, update.",
+          "examples": ["process"]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "description": "Стабильная идентичность сущности: префикс типа плюс ULID или UUIDv7. Для процесса это process instance id, а не PID: PID переиспользуется ОС и идентичностью не является (§14).",
+          "examples": ["proc_01K5R8Z9M5P8W3X7Y2C4E6G8J0"]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 260,
+          "description": "Человекочитаемое отображаемое имя для UI. Не является идентичностью и может отсутствовать.",
+          "examples": ["notepad.exe"]
+        }
+      }
+    }
+  }
+}

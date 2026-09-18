@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/IceAllManGoal/Chronoscope/main/shared/schemas/raw-event.schema.json",
+  "title": "Chronoscope RawEvent v1",
+  "description": "Универсальная оболочка вокруг source-specific payload (§12 PROJECT_SPEC). Оболочка — строгий контракт между Agent и Core; payload — точка расширения и схемой намеренно не ограничен. Уточнения относительно §12 и обоснования — в docs/EVENT_MODEL.md.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "raw_event_id",
+    "collector",
+    "collector_version",
+    "observed_at",
+    "host_id",
+    "payload_type",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "Версия схемы транспортного объекта (§52). Несовпадение должно приводить к явному отказу, а не к молчаливому неверному разбору."
+    },
+    "raw_event_id": {
+      "$ref": "#/$defs/raw_event_id",
+      "description": "Стабильный идентификатор сырого события, назначается Agent. Ключ идемпотентности ingest: повторная доставка того же raw_event_id не создаёт дубликат (§34)."
+    },
+    "collector": {
+      "$ref": "#/$defs/collector_name",
+      "description": "Коллектор, породивший событие."
+    },
+    "collector_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Версия коллектора на момент наблюдения.",
+      "examples": ["0.0.1"]
+    },
+    "observed_at": {
+      "$ref": "#/$defs/timestamp_utc",
+      "description": "Когда Chronoscope увидел событие. Отличается от source_timestamp при задержках и batch delivery (§24)."
+    },
+    "source_timestamp": {
+      "oneOf": [
+        { "$ref": "#/$defs/timestamp_utc" },
+        { "type": "null" }
+      ],
+      "description": "Время источника. Может отсутствовать, если источник его не предоставляет (§24)."
+    },
+    "host_id": {
+      "$ref": "#/$defs/host_id",
+      "description": "Случайный локальный идентификатор компьютера. Не hardware fingerprint, не серийный номер и не Microsoft account (§15)."
+    },
+    "boot_id": {
+      "oneOf": [
+        { "$ref": "#/$defs/boot_id" },
+        { "type": "null" }
+      ],
+      "description": "Идентификатор загрузки ОС (§16). Допустим null, если источник не позволяет определить boot session."
+    },
+    "payload_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 64,
+      "description": "Дискриминатор payload внутри коллектора. Определяет форму payload вместе с полем collector.",
+      "examples": ["process_start", "process_exit"]
+    },
+    "payload": {
+      "type": "object",
+      "description": "Source-specific данные в форме, максимально близкой к источнику. Намеренно не ограничен: envelope версионируется, payload развивается свободно. Формы payload документируются в docs/EVENT_MODEL.md."
+    }
+  },
+  "$defs": {
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?Z$",
+      "description": "RFC 3339 в UTC. Все timestamps хранятся в UTC (§24), поэтому суффикс Z обязателен, а смещения вида +05:00 недопустимы: локальная timezone — забота UI, а не хранилища."
+    },
+    "collector_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$",
+      "maxLength": 128,
+      "description": "Не менее двух сегментов в lowercase dot notation: <domain>.<source>.",
+      "examples": ["windows.process", "windows.eventlog", "plugin.steam"]
+    },
+    "raw_event_id": {
+      "type": "string",
+      "pattern": "^raw_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+      "description": "Префикс raw_ плюс ULID (канонический, заглавные) или UUIDv7 (§17). Значение должно быть стабильным между повторными отправками одного и того же события."
+    },
+    "host_id": {
+      "type": "string",
+      "pattern": "^host_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+      "description": "Префикс host_ плюс ULID или UUIDv7 (§15, §17)."
+    },
+    "boot_id": {
+      "type": "string",
+      "pattern": "^boot_(?:[0-9A-HJKMNP-TV-Z]{26}|[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+      "description": "Префикс boot_ плюс ULID или UUIDv7 (§16, §17)."
+    }
+  }
+}

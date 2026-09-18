@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "raw_event_id": "raw_01K5R8Z9M7P0W5X9Y4C6E8G0J2",
+  "collector": "windows.process",
+  "collector_version": "0.0.1",
+  "observed_at": "2026-09-18T11:07:44.512Z",
+  "source_timestamp": "2026-09-18T11:07:44.498Z",
+  "host_id": "host_01K5R8Z9M4Q7T2V6X1B3D5F7H9",
+  "boot_id": "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA",
+  "payload_type": "process_start",
+  "payload": {
+    "pid": 1234,
+    "parent_pid": 4312,
+    "name": "unknown.exe"
+  }
+}

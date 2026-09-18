@@ -1,0 +1,29 @@
+# Нормализация переводов строк.
+# В репозитории хранится всегда LF — это же требование задаёт .editorconfig.
+* text=auto eol=lf
+
+# Файлы, где Windows ожидает CRLF: cmd.exe требует его для меток и goto.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Бинарные форматы — не трогать
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.db binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+
+# Документация и данные: diff читаемый, лишних срабатываний нет
+*.md text
+*.json text
+*.schema.json text
+*.toml text
+*.yml text
+*.yaml text
+*.cs text
+*.py text
+*.ps1 text
