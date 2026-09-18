@@ -17,7 +17,7 @@ Chronoscope состоит из компонентов на разных тех�
 Проект ведётся как monorepo. Компоненты разделены каталогами:
 
 ```text
-backend/     Chronoscope Core (Python)
+core/        Chronoscope Core (Python)
 agent/       Chronoscope Agent (C#/.NET)
 frontend/    будущий UI
 shared/      JSON-схемы контракта и фикстуры, общие для Agent и Core

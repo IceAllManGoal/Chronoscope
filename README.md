@@ -57,7 +57,7 @@ GET /api/v1/events
 ```text
 Chronoscope/
 ├── docs/          документация, спека и ADR
-├── backend/       Chronoscope Core (Python / FastAPI)
+├── core/          Chronoscope Core (Python / FastAPI)
 ├── agent/         Chronoscope Agent (C# / .NET)
 ├── frontend/      будущий UI — вне 0.0.1
 ├── shared/        JSON-схемы контракта и фикстуры

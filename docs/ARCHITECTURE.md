@@ -52,7 +52,7 @@ Query API                 GET /api/v1/events
 ## 4. Слои Core и правила зависимостей
 
 ```text
-backend/chronoscope/
+core/chronoscope/
 ├── api/               HTTP: валидация transport-схемы, вызов use case, сериализация ответа
 ├── application/       use cases: IngestRawEvent, ListEvents, GetEvent
 ├── domain/            события, сущности, идентификаторы, event types
@@ -95,7 +95,7 @@ Chronoscope/
 │   ├── EVENT_MODEL.md          модель RawEvent и Event
 │   └── decisions/              ADR
 │
-├── backend/                    Chronoscope Core
+├── core/                       Chronoscope Core
 │   ├── chronoscope/
 │   ├── migrations/             Alembic
 │   ├── tests/
@@ -118,8 +118,6 @@ Chronoscope/
 ```
 
 ### Решения по структуре
-
-**`backend/` вместо `core/`.** Термин компонента остаётся **Core** (так он назван в §9 и §82 спеки — «один термин должен обозначать одно понятие»). `backend/` — только имя каталога: рядом живут `agent/` и `frontend/`, и такое именование читается однозначнее. Соответствие: компонент `Chronoscope Core` → каталог `backend/`, Python-пакет `backend/chronoscope/`.
 
 **Два проекта Agent, а не четыре.** §48 предлагает `Agent`, `Abstractions`, `Transport` и `Collectors.Windows`. В 0.0.1 фиксируется только одна граница — платформенная, потому что она архитектурно несущая: Windows-зависимый код должен быть отделён от платформенно-нейтрального. `Abstractions` и `Transport` при одном коллекторе и одном транспорте выделяются в проекты, когда появится второй коллектор или второй транспорт (§70, §80).
 

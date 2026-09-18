@@ -20,6 +20,7 @@
 ### Changed
 
 - `docs/Chronoscope_PROJECT_SPEC.md` перенесён в `docs/PROJECT_SPEC.md` (§89).
+- Каталог `backend/` переименован в `core/`: имя компонента (**Core**, §9 и §82) и путь к его коду теперь совпадают.
 
 ## [0.0.1] — не выпущена
 
