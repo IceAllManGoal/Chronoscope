@@ -27,7 +27,7 @@ public static class SettingsLoader
 
     private static readonly string[] CoreKeys = ["host", "port", "log_level", "max_request_bytes"];
     private static readonly string[] AgentKeys = ["batch_size", "flush_interval_ms", "buffer_capacity", "request_timeout_ms", "data_directory"];
-    private static readonly string[] ProcessKeys = ["enabled", "capture_command_line", "capture_user"];
+    private static readonly string[] ProcessKeys = ["enabled", "capture_path", "capture_command_line", "capture_user"];
     private static readonly string[] PrivacyKeys = ["redact_command_line_patterns"];
 
     /// <summary>Определить путь к конфигурации: явный аргумент, затем переменная окружения, затем файл в текущем каталоге.</summary>
@@ -91,7 +91,8 @@ public static class SettingsLoader
             // подходит как нельзя лучше: она сохраняет порядок ключей, а нам нужен
             // именно словарь, чтобы самим проверять состав ключей и отвергать
             // опечатки — привязка к классу просто проигнорировала бы лишний ключ.
-            root = TomlSerializer.Deserialize<TomlTable>(tomlText, TomlSerializerOptions.Default);
+            root = TomlSerializer.Deserialize<TomlTable>(tomlText, TomlSerializerOptions.Default)
+                ?? throw new ConfigurationException($"конфигурация{where} разобрана в пустой документ");
         }
         catch (TomlException exception)
         {
@@ -150,6 +151,7 @@ public static class SettingsLoader
         var processSettings = new ProcessCollectorSettings
         {
             Enabled = BoolValue(process, "enabled", true, sourcePath),
+            CapturePath = BoolValue(process, "capture_path", false, sourcePath),
             CaptureCommandLine = BoolValue(process, "capture_command_line", false, sourcePath),
             CaptureUser = BoolValue(process, "capture_user", false, sourcePath),
         };

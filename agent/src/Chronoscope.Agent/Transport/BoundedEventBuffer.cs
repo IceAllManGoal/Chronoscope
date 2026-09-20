@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Threading.Channels;
 using Chronoscope.Agent.Abstractions;
 using Chronoscope.Agent.Contract;
+using Chronoscope.Agent.Logging;
 
 namespace Chronoscope.Agent.Transport;
 
@@ -69,10 +69,20 @@ public sealed class BoundedEventBuffer : IRawEventSink
         // Не «молча потеряли»: потерянное событие обязано быть видно и в
         // счётчике, и в логе, иначе история будет выглядеть полной, не будучи ей.
         Interlocked.Increment(ref _dropped);
-        Trace.TraceWarning(
-            $"буфер переполнен (ёмкость {Capacity}): событие {rawEvent.PayloadType} {rawEvent.RawEventId} потеряно");
+        JsonLog.Warning(
+            "event_dropped",
+            "буфер переполнен, событие потеряно",
+            ("capacity", Capacity),
+            ("raw_event_id", rawEvent.RawEventId),
+            ("payload_type", rawEvent.PayloadType),
+            ("dropped_total", DroppedCount));
     }
 
-    /// <summary>Закрыть запись. Отправляющий цикл дочитает остаток и завершится.</summary>
-    internal void Complete() => _channel.Writer.TryComplete();
+    /// <summary>
+    /// Закрыть запись. Отправляющий цикл дочитает остаток и завершится.
+    ///
+    /// Публичный: закрытие записи — часть завершения работы Agent, которым
+    /// управляет точка входа, а она живёт в отдельном проекте.
+    /// </summary>
+    public void Complete() => _channel.Writer.TryComplete();
 }

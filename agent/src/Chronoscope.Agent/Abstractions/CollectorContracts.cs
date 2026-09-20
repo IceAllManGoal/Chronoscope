@@ -1,6 +1,15 @@
 namespace Chronoscope.Agent.Abstractions;
 
 /// <summary>
+/// Коллектор не может наблюдать за источником.
+///
+/// Отдельный нейтральный тип, а не исключение платформенной библиотеки: точка
+/// входа живёт в платформенно-нейтральном проекте и не должна знать типов
+/// Windows. §60 называет такую категорию отказов collector failure.
+/// </summary>
+public sealed class CollectorException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>
 /// Приёмник сырых событий. Контракт из §8.3.
 ///
 /// Намеренно синхронный и неблокирующий: коллектор обязан оставаться на связи с

@@ -1,5 +1,6 @@
 using Chronoscope.Agent.Configuration;
 using Chronoscope.Agent.Contract;
+using Chronoscope.Agent.Logging;
 
 namespace Chronoscope.Agent.Transport;
 
@@ -208,31 +209,48 @@ public sealed class BatchSender
         return false;
     }
 
-    /// <summary>Последняя попытка отправить накопленное при завершении (§62).</summary>
+    /// <summary>
+    /// Последняя попытка доставить всё, что осталось, при завершении (§62).
+    ///
+    /// Из буфера добирается остаток: чистая остановка не должна съедать события,
+    /// которые уже приняты, но ещё не отправлены. Ограничение по времени здесь
+    /// своё, а не признак отмены — завершение это ровно тот момент, когда отправка
+    /// нужнее всего.
+    /// </summary>
     private async Task FlushOnShutdownAsync()
     {
-        if (_pending.Count == 0)
-        {
-            return;
-        }
-
-        var batch = _pending;
-        _pending = [];
-
-        // Отменённый токен здесь не годится: завершение — ровно тот момент,
-        // когда отправка нужна, поэтому ограничиваем её своим временем, а не
-        // признаком остановки.
         using var timeout = new CancellationTokenSource(ShutdownFlushTimeout);
 
-        try
+        while (true)
         {
-            var outcome = await _client.SendAsync(batch, timeout.Token).ConfigureAwait(false);
-            RecordSuccess(batch.Count, outcome);
-        }
-        catch (Exception exception)
-        {
-            Interlocked.Increment(ref _sendFailures);
-            Report($"[agent] не удалось отправить {batch.Count} событий при завершении: {exception.Message}");
+            while (_pending.Count < _settings.BatchSize && _buffer.Reader.TryRead(out var rawEvent))
+            {
+                _pending.Add(rawEvent);
+            }
+
+            if (_pending.Count == 0)
+            {
+                return;
+            }
+
+            var batch = _pending;
+            _pending = [];
+
+            try
+            {
+                var outcome = await _client.SendAsync(batch, timeout.Token).ConfigureAwait(false);
+                RecordSuccess(batch.Count, outcome);
+            }
+            catch (Exception exception)
+            {
+                Interlocked.Increment(ref _sendFailures);
+                JsonLog.Error(
+                    "shutdown_flush_failed",
+                    "не удалось отправить события при завершении",
+                    ("events", batch.Count),
+                    ("error", exception.Message));
+                return;
+            }
         }
     }
 
@@ -256,5 +274,5 @@ public sealed class BatchSender
         return scaled > MaxRetryDelay ? MaxRetryDelay : scaled;
     }
 
-    private static void Report(string message) => Console.Error.WriteLine(message);
+    private static void Report(string message) => JsonLog.Error("sender", message);
 }
