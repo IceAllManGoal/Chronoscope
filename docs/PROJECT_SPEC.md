@@ -878,14 +878,27 @@ CREATE TABLE events (
 В ранних версиях:
 
 ```text
-events(timestamp)
-events(type, timestamp)
-events(actor_id, timestamp)
-events(subject_id, timestamp)
+events(timestamp, id)
+events(type, timestamp, id)
+events(actor_id, timestamp, id)
+events(subject_id, timestamp, id)
 raw_events(collector, source_timestamp)
 ```
 
+`id` стоит последним в индексах событий потому, что список сортируется по
+`timestamp DESC, id DESC` (§32): без второй компоненты сортировки индекс покрывает
+её лишь наполовину, и SQLite упорядочивает остаток сам — `USE TEMP B-TREE FOR LAST
+TERM OF ORDER BY`. На данных с микросекундной точностью это почти незаметно, а на
+источнике, сообщающем время с точностью до секунды, страница списка дорожает на
+порядки (измерено на настоящей схеме и настоящем запросе: 195 мс против 0.52 мс
+на 200 000 событий с общим `timestamp`).
+Разбор и издержки — [ADR-0014](decisions/0014-event-indexes-cover-ordering.md).
+
 Не создавать десятки индексов «на будущее». Каждый индекс занимает место и замедляет insert.
+
+Состав индексов проверяется механически: `core/tests/test_index_coverage.py`
+требует, чтобы в плане запроса страницы не было временного B-tree, и проверяет
+план того самого запроса, которым пользуется репозиторий.
 
 ---
 

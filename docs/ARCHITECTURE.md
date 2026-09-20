@@ -195,7 +195,9 @@ events         нормализованные события
 
 Обе таблицы в SQLite, доступ только через слой репозиториев ([ADR-0004](decisions/0004-sqlite-first.md)). Схема изменяется **только** через Alembic-миграции (§81, инвариант 11).
 
-Индексы в ранних версиях (§27): `events(timestamp)`, `events(type, timestamp)`, `events(actor_id, timestamp)`, `events(subject_id, timestamp)`, `raw_events(collector, source_timestamp)`. Десятки индексов «на будущее» не создаются: каждый занимает место и замедляет insert.
+Индексы в ранних версиях (§27): `events(timestamp, id)`, `events(type, timestamp, id)`, `events(actor_id, timestamp, id)`, `events(subject_id, timestamp, id)`, `raw_events(collector, source_timestamp)`. Десятки индексов «на будущее» не создаются: каждый занимает место и замедляет insert.
+
+`id` в конце индексов событий — не украшение: список сортируется по `timestamp DESC, id DESC` (§32), и без второй компоненты сортировки SQLite упорядочивает остаток сам. Насколько это дорого, зависит от плотности времен в источнике, а не от объёма истории — измерения и издержки в [ADR-0014](decisions/0014-event-indexes-cover-ordering.md).
 
 Cold storage (Parquet + DuckDB), retention-политики и агрегаты — вне 0.0.1 (§30, §39).
 

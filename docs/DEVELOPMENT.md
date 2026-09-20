@@ -64,7 +64,7 @@ cd core; uv run chronoscope doctor                # то же, но с расш�
 pwsh scripts/test.ps1              # оба набора, как в CI
 
 cd core
-uv run pytest                      # 301 тест Core
+uv run pytest                      # 308 тестов Core
 
 cd ../agent
 dotnet test Chronoscope.Agent.sln  # 97 тестов Agent

@@ -76,10 +76,17 @@ events = Table(
 
 # §27. Индекс (type, timestamp) обслуживает и фильтр по типу, и поиск
 # родительского экземпляра процесса при нормализации.
-Index("ix_events_timestamp", events.c.timestamp)
-Index("ix_events_type_timestamp", events.c.type, events.c.timestamp)
-Index("ix_events_actor_id_timestamp", events.c.actor_id, events.c.timestamp)
-Index("ix_events_subject_id_timestamp", events.c.subject_id, events.c.timestamp)
+#
+# В конец каждого индекса добавлен `id`: список событий сортируется по
+# `timestamp DESC, id DESC` (§32), и без второй компоненты в индексе SQLite
+# упорядочивает остаток сам (USE TEMP B-TREE FOR LAST TERM OF ORDER BY). На
+# данных с микросекундной точностью это почти незаметно, а на источнике, который
+# сообщает время с точностью до секунды, страница списка дорожает на порядки.
+# Измерения и издержки — в миграции 0002 и [ADR-0014](../../../docs/decisions/0014-event-indexes-cover-ordering.md).
+Index("ix_events_timestamp", events.c.timestamp, events.c.id)
+Index("ix_events_type_timestamp", events.c.type, events.c.timestamp, events.c.id)
+Index("ix_events_actor_id_timestamp", events.c.actor_id, events.c.timestamp, events.c.id)
+Index("ix_events_subject_id_timestamp", events.c.subject_id, events.c.timestamp, events.c.id)
 Index("ix_raw_events_collector_source_timestamp", raw_events.c.collector, raw_events.c.source_timestamp)
 
 #: Атрибут нормализованного события, по которому ищется родительский процесс.
