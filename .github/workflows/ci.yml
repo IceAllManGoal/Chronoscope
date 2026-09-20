@@ -1,0 +1,60 @@
+name: CI
+
+# Проверки запускаются на pull request и на main после слияния. §58 требует,
+# чтобы тесты нужного уровня шли вместе с изменением, а §76 — чтобы они
+# действительно проходили. До появления этого файла PR не проверял никто, кроме
+# автора: ruleset гарантировал форму изменений, но не их работоспособность.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Правами workflow ничего не пишет: он только читает репозиторий (§66, §67 —
+# принцип минимальных привилегий).
+permissions:
+  contents: read
+
+# Новая ревизия той же ветки отменяет предыдущий прогон: незачем тратить минуты
+# на проверку кода, который уже переписан.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    # Имя job'а — это и есть имя проверки, которое указывается в ruleset
+    # (Require status checks to pass). Менять его стоит осознанно: переименование
+    # сломает уже настроенное требование.
+    name: Core tests
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: core
+    env:
+      # Без этого Windows-консоль спотыкается о кириллицу в выводе pytest.
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Установить Python
+        run: uv python install 3.13
+
+      - name: Установить зависимости
+        # --locked: если uv.lock разошёлся с pyproject.toml, это ошибка, а не
+        # повод молча пересобрать окружение и проверить не то, что зафиксировано.
+        run: uv sync --all-groups --locked
+
+      - name: Применить миграции
+        # Core не применяет миграции сам (инвариант 11 §81), поэтому проверяем
+        # отдельно, что схема собирается с нуля — зелёные тесты этого не
+        # гарантируют, они применяют миграции своим путём.
+        run: uv run alembic upgrade head
+
+      - name: Тесты
+        run: uv run pytest
