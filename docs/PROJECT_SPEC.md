@@ -1523,9 +1523,9 @@ chronoscope/
              .editorconfig, .gitignore, docs/, core/, agent/, shared/,
              .github/workflows/ci.yml,
              docs/PRIVACY.md, docs/DEVELOPMENT.md,
-             scripts/reset-dev-data.ps1, data/.gitkeep
-не создано   scripts/dev.ps1, scripts/test.ps1,
-             frontend/ (зарезервирован под стек §55 — нужен к 0.1.0)
+             scripts/dev.ps1, scripts/test.ps1, scripts/reset-dev-data.ps1,
+             data/.gitkeep
+не создано   frontend/ (зарезервирован под стек §55 — нужен к 0.1.0)
 ```
 
 Состав Agent зафиксирован тремя проектами, а не четырьмя из §48: нейтральное
