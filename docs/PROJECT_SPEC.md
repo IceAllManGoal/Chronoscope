@@ -1548,12 +1548,14 @@ core/chronoscope/
 │       └── events.py
 │
 ├── application/
+│   ├── ports.py
 │   ├── ingest/
 │   │   ├── ingest_raw_event.py
 │   │   └── ingest_batch.py
 │   └── queries/
 │       ├── list_events.py
-│       └── get_event.py
+│       ├── get_event.py
+│       └── core_status.py
 │
 ├── domain/
 │   ├── events/
@@ -1601,6 +1603,14 @@ core/chronoscope/
 Тоже не слой и не Python: Core её только раздаёт, а страница обращается к
 `/api/v1` по тому же origin.
 
+`application/ports.py` — порты слоя приложения (`RawEventRepositoryPort`,
+`EventRepositoryPort`) и формы данных, которыми порт обменивается (`EventQuery`,
+`EventPage`). Появились, когда выяснилось, что `application/` импортирует модуль
+репозиториев: направление зависимости было обратным, и подменить хранение можно
+было только вместе с правкой use case. Кодирование курсора пагинации осталось в
+слое хранения: его формат зависит от порядка сортировки, а клиенту он непрозрачен
+(§32).
+
 ---
 
 # 50. Layer rules
@@ -1617,13 +1627,18 @@ core/chronoscope/
 IngestRawEvent
 ListEvents
 GetEvent
+GetCoreStatus
 ```
 
-Координирует repositories, normalizers и transaction.
+Координирует repositories, normalizers и transaction. Хранилище видит через порты
+из `application/ports.py`, а не через модуль репозиториев: «repository» здесь —
+понятие приложения, а то, что под ним SQLite, знать use case незачем.
 
 ## Infrastructure
 
 Реализует конкретные технологии: SQLite, filesystem, logging, config.
+Реализации портов лежат здесь и наследоваться от них не обязаны: протоколы
+структурные, достаточно совпадения методов.
 
 ## API
 
@@ -1638,6 +1653,24 @@ Use Case
  ↓
 Repository
 ```
+
+Единственное место, которому видна инфраструктура, — композиционный корень
+`api/dependencies.py`: он собирает адаптеры и передаёт их use cases.
+
+## Проверка правил
+
+ADR-0008 признаёт слабое место прямо: «границы слоёв поддерживаются дисциплиной:
+компилятор не помешает `api/` напрямую обратиться к SQLAlchemy». Ревью — не
+компилятор, поэтому правила проверяются механически: `core/tests/test_layer_rules.py`
+читает импорты через `ast` (импорт модуля поймал бы только падение в рантайме и
+пропустил бы зависимость внутри функции) и требует, чтобы:
+
+- `domain/` и `normalization/` не импортировали FastAPI, SQLAlchemy, SQLite, HTTP и Windows;
+- `application/` и `api/` не импортировали `chronoscope.infrastructure` — кроме композиционного корня;
+- `application/` и `api/` не импортировали `sqlalchemy`, `sqlite3` и `alembic`: это означало бы SQL в обход репозиториев.
+
+Сам детектор тоже проверяется — на заведомо нарушающем исходнике, — иначе
+«зелёный» тест не отличался бы от теста, который ничего не проверял.
 
 ---
 

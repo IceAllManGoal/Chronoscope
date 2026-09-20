@@ -13,11 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from chronoscope.infrastructure.config.settings import CoreSettings
-from chronoscope.infrastructure.database.repositories import (
-    EventRepository,
-    RawEventRepository,
-)
+from chronoscope.application.ports import EventRepositoryPort, RawEventRepositoryPort
 
 #: Файлы, которые SQLite создаёт рядом с основной базой.
 SIDECAR_SUFFIXES = ("", "-wal", "-shm")
@@ -51,18 +47,26 @@ def database_size_bytes(database_path: Path) -> int:
 
 
 class GetCoreStatus:
+    """Состояние Core и объёмы данных.
+
+    Принимает путь к базе, а не объект настроек: use case нужно одно значение, а
+    не весь ``CoreSettings``. Пока сюда передавался объект конфигурации, слой
+    application зависел от модуля настроек инфраструктуры ради одного поля —
+    и вместе с ним от всего, что этот модуль тянет за собой (§50).
+    """
+
     def __init__(
         self,
         *,
-        raw_repository: RawEventRepository,
-        event_repository: EventRepository,
-        settings: CoreSettings,
+        raw_repository: RawEventRepositoryPort,
+        event_repository: EventRepositoryPort,
+        database_path: Path,
         version: str,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._raw_repository = raw_repository
         self._event_repository = event_repository
-        self._settings = settings
+        self._database_path = database_path
         self._version = version
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -74,6 +78,6 @@ class GetCoreStatus:
             events_total=self._event_repository.count(),
             events_last_minute=self._event_repository.count_since(moment - STATUS_WINDOW),
             raw_events_total=self._raw_repository.count(),
-            database_path=str(self._settings.database_path),
-            database_size_bytes=database_size_bytes(self._settings.database_path),
+            database_path=str(self._database_path),
+            database_size_bytes=database_size_bytes(self._database_path),
         )

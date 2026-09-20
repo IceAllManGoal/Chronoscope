@@ -64,7 +64,7 @@ cd core; uv run chronoscope doctor                # то же, но с расш�
 pwsh scripts/test.ps1              # оба набора, как в CI
 
 cd core
-uv run pytest                      # 291 тест Core
+uv run pytest                      # 297 тестов Core
 
 cd ../agent
 dotnet test Chronoscope.Agent.sln  # 97 тестов Agent
@@ -91,12 +91,15 @@ dotnet test Chronoscope.Agent.sln  # 97 тестов Agent
 ```text
 domain/         не зависит от FastAPI, SQLAlchemy, SQLite, HTTP и Windows
 normalization/  то же; доступ к сохранённым данным — через порт, а не через репозиторий
-application/    use cases: координируют репозитории, нормализаторы и транзакцию
+application/    use cases: координируют репозитории, нормализаторы и транзакцию;
+                хранилище видят через порты из application/ports.py
 infrastructure/ конкретные технологии: SQLite, файловая система, логи, конфигурация
 api/            HTTP: валидация транспортной схемы, вызов use case, ответ; SQL не пишет
 ```
 
-Механическая проверка сейчас покрывает `domain/` и `normalization/`. Остальные границы держатся ревью — то есть слабее, чем хотелось бы, и это записано, а не замаскировано.
+Правила проверяются механически (`core/tests/test_layer_rules.py`), а не только на ревью: `domain/` и `normalization/` не должны импортировать технологии, `application/` и `api/` — слой инфраструктуры и хранилище. Единственное исключение — композиционный корень `api/dependencies.py`: он соединяет адаптеры с use cases, и без него соединять было бы негде. Сам детектор тоже проверяется, на заведомо нарушающем исходнике: правило, которое не может сработать, — это не правило, а комментарий.
+
+При добавлении use case помни: он не должен знать про SQLite. Порты объявляются в `application/ports.py`, реализация — в `infrastructure/`.
 
 ## CI
 

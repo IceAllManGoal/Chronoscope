@@ -1,7 +1,17 @@
 """Репозитории raw_events и events (§26, §32, §49).
 
 Единственное место, где Core обращается к SQL. Слой API не пишет запросы
-самостоятельно (§50), а use cases работают через эти репозитории.
+самостоятельно (§50), а use cases работают через порты, объявленные в
+``application/ports.py``: эти классы их реализуют структурно — совпадением
+методов, без наследования. Порты описаны в application, а не здесь, потому что
+обратное направление зависимости означало бы, что use case не существует без
+слоя хранения.
+
+Форма запроса (``EventQuery``) и форма страницы (``EventPage``) тоже объявлены в
+application: это то, чем use case обменивается с хранилищем, а не деталь SQLite.
+Здесь остаётся то, что действительно принадлежит хранению, — кодирование курсора
+пагинации: §32 требует непрозрачную для клиента строку, а её формат зависит от
+порядка сортировки, который задаёт запрос.
 
 Идемпотентность (§34). Обе вставки используют ``ON CONFLICT DO NOTHING`` и
 сообщают вызывающему коду, была ли строка добавлена. Это и есть механизм
@@ -14,7 +24,6 @@ from __future__ import annotations
 import base64
 import binascii
 import json
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +31,12 @@ from sqlalchemy import Engine, and_, func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import SQLAlchemyError
 
+from chronoscope.application.ports import (
+    DEFAULT_PAGE_LIMIT,
+    MAX_PAGE_LIMIT,
+    EventPage,
+    EventQuery,
+)
 from chronoscope.domain.errors import InvalidInputError, StorageError
 from chronoscope.domain.events.entity_ref import EntityRef
 from chronoscope.domain.events.event import Event
@@ -33,9 +48,6 @@ from chronoscope.infrastructure.database.models import (
     events,
     raw_events,
 )
-
-DEFAULT_PAGE_LIMIT = 100
-MAX_PAGE_LIMIT = 1000
 
 _CURSOR_VERSION = 1
 
@@ -76,37 +88,6 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
         raise InvalidInputError("cursor: значение не является корректным курсором")
 
     return parse_utc(timestamp_raw, "cursor.t"), event_id
-
-
-# ── Запросы и страницы ───────────────────────────────────────────────
-
-
-@dataclass(frozen=True, slots=True)
-class EventQuery:
-    """Фильтры GET /api/v1/events (§31)."""
-
-    limit: int = DEFAULT_PAGE_LIMIT
-    cursor: str | None = None
-    types: tuple[str, ...] = ()
-    source: str | None = None
-    actor_id: str | None = None
-    subject_id: str | None = None
-    time_from: datetime | None = None
-    time_to: datetime | None = None
-
-    def __post_init__(self) -> None:
-        if self.limit < 1:
-            raise InvalidInputError("limit: должен быть положительным")
-        if self.limit > MAX_PAGE_LIMIT:
-            raise InvalidInputError(f"limit: не может превышать {MAX_PAGE_LIMIT}")
-        if self.time_from is not None and self.time_to is not None and self.time_from > self.time_to:
-            raise InvalidInputError("from: не может быть позже to")
-
-
-@dataclass(frozen=True, slots=True)
-class EventPage:
-    events: tuple[Event, ...] = ()
-    next_cursor: str | None = None
 
 
 # ── Преобразование строк БД в доменные объекты ───────────────────────
@@ -156,7 +137,7 @@ def _row_to_raw_event(row: Any) -> RawEvent:
 
 
 class RawEventRepository:
-    """Хранилище сырых событий (§29)."""
+    """Хранилище сырых событий (§29). Реализует ``RawEventRepositoryPort`` (§50)."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -215,7 +196,7 @@ class RawEventRepository:
 
 
 class EventRepository:
-    """Хранилище нормализованных событий (§13, §26)."""
+    """Хранилище нормализованных событий (§13, §26). Реализует ``EventRepositoryPort`` (§50)."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
