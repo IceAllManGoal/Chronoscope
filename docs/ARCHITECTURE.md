@@ -131,7 +131,7 @@ Chronoscope/
 
 **`docker-compose.yml` отсутствует.** См. [ADR-0010](decisions/0010-no-containerization-in-0.0.1.md).
 
-**Дерево выше — целевая раскладка, а не снимок.** Фактически созданы `docs/`, `core/`, `shared/`, `scripts/reset-dev-data.ps1` и файлы в корне. `agent/` существует только как каталоги (`.gitkeep`), `scripts/dev.ps1` и `scripts/test.ps1` не созданы, `docs/PRIVACY.md` и `docs/DEVELOPMENT.md` отсутствуют. Список расхождений ведётся в §48 [`PROJECT_SPEC.md`](PROJECT_SPEC.md) — критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре.
+**Дерево выше — целевая раскладка, а не снимок.** Фактически созданы `docs/`, `core/`, `shared/`, `.github/workflows/ci.yml`, `scripts/reset-dev-data.ps1` и файлы в корне. `agent/` существует только как каталоги (`.gitkeep`), `scripts/dev.ps1` и `scripts/test.ps1` не созданы, `docs/PRIVACY.md` и `docs/DEVELOPMENT.md` отсутствуют. Список расхождений ведётся в §48 [`PROJECT_SPEC.md`](PROJECT_SPEC.md) — критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре.
 
 ## 6. Доставка, backpressure и идемпотентность
 

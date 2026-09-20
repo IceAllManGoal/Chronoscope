@@ -1,5 +1,7 @@
 # Chronoscope
 
+[![CI](https://github.com/IceAllManGoal/Chronoscope/actions/workflows/ci.yml/badge.svg)](https://github.com/IceAllManGoal/Chronoscope/actions/workflows/ci.yml)
+
 **Локальная история компьютера, которую можно исследовать.**
 
 Chronoscope — local-first система наблюдения за историей работы компьютера. Её задача — не показывать, что происходит прямо сейчас (для этого есть Task Manager), а сохранять контекст происходившего во времени, чтобы можно было вернуться к нужному моменту и ответить на вопросы:
@@ -46,7 +48,7 @@ GET /api/v1/events
 |---|---|
 | Структура, документация, ADR | готово |
 | JSON-схемы контракта и фикстуры | готово |
-| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 254 теста |
+| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 255 тестов |
 | `Chronoscope Agent` и `ProcessCollector` | не начато — без него нет реального сбора из Windows |
 | Frontend | не начато (вне 0.0.1) |
 
@@ -146,7 +148,7 @@ curl "http://127.0.0.1:7342/api/v1/events?type=process.started"
 ```powershell
 cd core
 
-uv run pytest        # 254 теста: домен, хранилище, нормализатор, контракт, интеграция
+uv run pytest        # 255 тестов: домен, хранилище, нормализатор, контракт, правила слоёв, интеграция
 uv run pytest -q tests/test_api_integration.py
 ```
 

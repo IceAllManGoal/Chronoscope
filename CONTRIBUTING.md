@@ -87,6 +87,8 @@ e2e          — процесс целиком (см. §75)
 
 Фикстуры для тестов берутся из `shared/fixtures/` — так normalizer тестируется без запуска реальных процессов.
 
+Эти уровни прогоняются в CI на каждый pull request. Правила слоёв §50 проверяются механически, а не только на ревью: `core/tests/test_layer_rules.py` следит, чтобы `domain/` и `normalization/` не импортировали FastAPI, SQLAlchemy, SQLite, HTTP и Windows API.
+
 ## Коммиты и pull requests
 
 - Ветка от `main`, осмысленное имя: `feat/ingest-endpoint`, `fix/duplicate-raw-event`.

@@ -14,7 +14,7 @@
   - репозитории с идемпотентной вставкой (§34), cursor-пагинацией (§32) и поиском экземпляра процесса;
   - `ProcessNormalizer` и реестр нормализаторов;
   - use cases приёма и запросов, API на FastAPI: health, status, ingest, events, event detail;
-  - 254 теста: домен, идентификаторы, хранилище, миграции, нормализатор, контракт против `shared/schemas`, интеграционные сценарии.
+  - 255 тестов: домен, идентификаторы, хранилище, миграции, нормализатор, контракт против `shared/schemas`, правила слоёв, интеграционные сценарии.
 - Конфигурация Core в TOML (§36) с запретом bind вне loopback на уровне настроек (ADR-0007).
 - Структурированное JSON-логирование (§35).
 - `core/README.md`, `core/chronoscope.example.toml`, `core/alembic.ini`.
@@ -26,6 +26,8 @@
 - JSON-схемы контракта v1 в `shared/schemas/`: `raw-event`, `ingest-batch`, `event`.
 - Фикстуры Windows process events в `shared/fixtures/`.
 - `scripts/reset-dev-data.ps1`, `scripts/README.md`.
+- **CI на GitHub Actions** (`.github/workflows/ci.yml`): Windows-раннер (ADR-0006), Python 3.13, `uv sync --all-groups --locked`, `alembic upgrade head`, `pytest`. Запускается на каждый pull request и на `main`. До этого изменение не проверял никто, кроме автора: ruleset гарантировал форму изменений, но не их работоспособность.
+- Тест `core/tests/test_layer_rules.py`: правила слоёв §50 проверяются механически — `domain/` и `normalization/` не должны импортировать FastAPI, SQLAlchemy, SQLite, HTTP и Windows API. ADR-0008 признавал, что эти границы держатся только дисциплиной и ревью, а ревью — не компилятор.
 
 ### Changed
 

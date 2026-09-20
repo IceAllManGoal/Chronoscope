@@ -1522,6 +1522,7 @@ chronoscope/
 ```text
 готово       README.md, LICENSE, CONTRIBUTING.md, SECURITY.md, CHANGELOG.md,
              .editorconfig, .gitignore, docs/, core/, shared/,
+             .github/workflows/ci.yml,
              scripts/reset-dev-data.ps1, data/.gitkeep
 не создано   docs/PRIVACY.md, docs/DEVELOPMENT.md,
              agent/ целиком — каталоги есть, Chronoscope.Agent.sln и кода нет,
