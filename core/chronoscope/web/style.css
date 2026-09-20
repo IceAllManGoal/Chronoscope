@@ -1,0 +1,179 @@
+/* Оформление базовой страницы (§77).
+   Тёмная тема без переключателя: у продукта пока один вид, и лишний элемент
+   управления в первой версии интерфейса не нужен (§70). */
+
+:root {
+  --bg: #14161a;
+  --panel: #1c1f25;
+  --panel-2: #23272e;
+  --line: #30353d;
+  --text: #e7e9ec;
+  --muted: #9aa1ab;
+  --accent: #5aa9e6;
+  --ok: #4caf72;
+  --warn: #d9a441;
+  --bad: #d9635f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: 0.2px; }
+.sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+}
+.badge-ok { color: var(--ok); border-color: #2c543a; }
+.badge-warn { color: var(--warn); border-color: #57482a; }
+.badge-bad { color: var(--bad); border-color: #5a3230; }
+.badge-wait { color: var(--muted); }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.filters input {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  min-width: 180px;
+}
+
+.filters input[type="number"] { min-width: 80px; width: 80px; }
+
+.filters-actions { display: flex; gap: 8px; }
+
+button {
+  background: var(--accent);
+  color: #0d1117;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.45; cursor: default; }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+
+.message {
+  margin: 12px 24px 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #5a3230;
+  color: var(--bad);
+  background: #241b1b;
+  white-space: pre-line;
+}
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: 16px;
+  padding: 16px 24px 24px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  main { grid-template-columns: 1fr; }
+}
+
+.list, .detail {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+table { width: 100%; border-collapse: collapse; }
+
+th, td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--panel-2); }
+tbody tr.selected { background: #26313b; }
+
+td.mono, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; }
+td.nowrap { white-space: nowrap; }
+td.id { color: var(--muted); word-break: break-all; }
+
+.empty, .hint { margin: 16px; color: var(--muted); }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+.page-info { color: var(--muted); font-size: 12px; }
+
+.detail { padding: 0 0 12px; }
+.detail h2 { margin: 0; padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--line); }
+
+.kv { width: 100%; }
+.kv th {
+  width: 40%;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 400;
+  border-bottom: 1px solid var(--line);
+}
+.kv td { word-break: break-all; }
+
+.detail section { padding: 12px 16px 0; }
+.detail h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+
+.bottom {
+  padding: 0 24px 24px;
+  color: var(--muted);
+  font-size: 12px;
+}
+code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }

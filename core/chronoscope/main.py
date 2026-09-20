@@ -10,9 +10,12 @@ from __future__ import annotations
 import contextlib
 import logging
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from chronoscope import __version__
 from chronoscope.api.dependencies import CoreContainer, build_container
@@ -90,7 +93,53 @@ def create_app(settings: CoreSettings | None = None) -> FastAPI:
     app.include_router(ingest.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
 
+    mount_web_page(app, resolved_settings)
+
     return app
+
+
+#: Путь, по которому отдаётся страница. Отдельный префикс, а не корень: API
+#: версионирован и живёт под /api/v1, а статика — не часть API (§31).
+WEB_MOUNT_PATH = "/ui"
+
+#: Каталог со статикой внутри пакета. Внутри пакета — потому что тогда страница
+#: находится всегда, независимо от того, откуда запущен Core и как установлен.
+WEB_DIRECTORY = Path(__file__).parent / "web"
+
+
+def mount_web_page(app: FastAPI, settings: CoreSettings) -> bool:
+    """Отдать базовую страницу из пакета (ADR-0012).
+
+    Страница — клиент собственного API, а не второй доступ к базе: она
+    обращается к `/api/v1` по тому же origin, поэтому инвариант 10 §81
+    соблюдается по построению, а CORS и прокси не нужны вовсе.
+
+    Отсутствие каталога не считается отказом: Core остаётся работоспособным как
+    API, и это честнее молчаливого 404 — о причине сообщается в лог при старте.
+    """
+    if not WEB_DIRECTORY.is_dir():
+        return False
+
+    app.mount(WEB_MOUNT_PATH, StaticFiles(directory=WEB_DIRECTORY, html=True), name="ui")
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        """Перенаправить корень на страницу.
+
+        Без этого человек, открывший единственный известный ему адрес
+        (`http://127.0.0.1:7342`), получил бы 404 и решил, что Core не работает.
+        """
+        return RedirectResponse(url=f"{WEB_MOUNT_PATH}/")
+
+    log_event(
+        get_logger("main"),
+        logging.INFO,
+        "web_page_mounted",
+        "базовая страница доступна",
+        url=f"http://{settings.host}:{settings.port}{WEB_MOUNT_PATH}/",
+    )
+
+    return True
 
 
 def run() -> None:
