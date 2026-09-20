@@ -27,6 +27,7 @@ from chronoscope.infrastructure.database.repositories import (
     EventRepository,
     RawEventRepository,
 )
+from chronoscope.infrastructure.database.unit_of_work import SqliteUnitOfWork
 from chronoscope.normalization.registry import NormalizerRegistry, default_registry
 
 CONTAINER_STATE_KEY = "chronoscope_container"
@@ -60,9 +61,16 @@ class CoreContainer:
         event_repository = EventRepository(engine)
         normalizer_registry = registry or default_registry()
 
+        def unit_of_work() -> SqliteUnitOfWork:
+            """Единица работы на один вызов: одна транзакция на пакет (§34).
+
+            Фабрика, а не готовый объект: транзакция — не разделяемое состояние,
+            переиспользовать её между запросами нельзя.
+            """
+            return SqliteUnitOfWork(engine)
+
         ingest_raw_event = IngestRawEvent(
-            raw_repository=raw_repository,
-            event_repository=event_repository,
+            unit_of_work=unit_of_work,
             registry=normalizer_registry,
             clock=clock,
         )
@@ -77,7 +85,7 @@ class CoreContainer:
             # Один и тот же экземпляр use case: пакетная обработка не должна
             # пересобирать зависимости заново, иначе настройки и логирование
             # разъедутся с одиночным приёмом.
-            ingest_batch=IngestBatch(ingest_raw_event),
+            ingest_batch=IngestBatch(ingest_raw_event, unit_of_work),
             list_events=ListEvents(event_repository),
             get_event=GetEvent(event_repository),
             get_core_status=GetCoreStatus(

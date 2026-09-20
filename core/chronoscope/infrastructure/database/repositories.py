@@ -27,7 +27,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Engine, and_, func, or_, select
+from sqlalchemy import Connection, Engine, and_, func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -136,11 +136,40 @@ def _row_to_raw_event(row: Any) -> RawEvent:
     )
 
 
-class RawEventRepository:
-    """Хранилище сырых событий (§29). Реализует ``RawEventRepositoryPort`` (§50)."""
+class _Repository:
+    """Общая часть репозиториев: работа от движка или внутри чужой транзакции.
 
-    def __init__(self, engine: Engine) -> None:
-        self._engine = engine
+    ``source`` — либо движок, либо соединение. Репозиторий, созданный от движка,
+    владеет транзакцией сам: каждая запись — отдельный commit. Репозиторий,
+    созданный от соединения, транзакцией не управляет вовсе — её границами
+    владеет тот, кто соединение открыл (``SqliteUnitOfWork``).
+
+    Разница не косметическая: при приёме пакета из 50 событий первый вариант
+    делает 100 коммитов, второй — один (§34, ADR-0004).
+    """
+
+    def __init__(self, source: Engine | Connection) -> None:
+        self._source = source
+
+    def _write(self, statement: Any) -> Any:
+        """Выполнить запись. Открытая транзакция — своя или чужая."""
+        if isinstance(self._source, Connection):
+            return self._source.execute(statement)
+
+        with self._source.begin() as connection:
+            return connection.execute(statement)
+
+    def _read(self, statement: Any) -> Any:
+        """Выполнить чтение. Внутри чужой транзакции видно и незакоммиченное."""
+        if isinstance(self._source, Connection):
+            return self._source.execute(statement)
+
+        with self._source.connect() as connection:
+            return connection.execute(statement)
+
+
+class RawEventRepository(_Repository):
+    """Хранилище сырых событий (§29). Реализует ``RawEventRepositoryPort`` (§50)."""
 
     def insert(self, raw_event: RawEvent, *, ingested_at: datetime) -> bool:
         """Сохранить сырое событие.
@@ -170,18 +199,15 @@ class RawEventRepository:
         )
 
         try:
-            with self._engine.begin() as connection:
-                result = connection.execute(statement)
-                return result.rowcount == 1
+            return self._write(statement).rowcount == 1
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось сохранить raw event: {exc}") from exc
 
     def get(self, raw_event_id: str) -> RawEvent | None:
         try:
-            with self._engine.connect() as connection:
-                row = connection.execute(
-                    select(raw_events).where(raw_events.c.id == raw_event_id)
-                ).one_or_none()
+            row = self._read(
+                select(raw_events).where(raw_events.c.id == raw_event_id)
+            ).one_or_none()
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось прочитать raw event: {exc}") from exc
 
@@ -189,17 +215,13 @@ class RawEventRepository:
 
     def count(self) -> int:
         try:
-            with self._engine.connect() as connection:
-                return int(connection.execute(select(func.count()).select_from(raw_events)).scalar_one())
+            return int(self._read(select(func.count()).select_from(raw_events)).scalar_one())
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось посчитать raw events: {exc}") from exc
 
 
-class EventRepository:
+class EventRepository(_Repository):
     """Хранилище нормализованных событий (§13, §26). Реализует ``EventRepositoryPort`` (§50)."""
-
-    def __init__(self, engine: Engine) -> None:
-        self._engine = engine
 
     def insert(self, event: Event, *, ingested_at: datetime) -> bool:
         """Сохранить нормализованное событие.
@@ -239,16 +261,13 @@ class EventRepository:
         )
 
         try:
-            with self._engine.begin() as connection:
-                result = connection.execute(statement)
-                return result.rowcount == 1
+            return self._write(statement).rowcount == 1
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось сохранить event: {exc}") from exc
 
     def get(self, event_id: str) -> Event | None:
         try:
-            with self._engine.connect() as connection:
-                row = connection.execute(select(events).where(events.c.id == event_id)).one_or_none()
+            row = self._read(select(events).where(events.c.id == event_id)).one_or_none()
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось прочитать event: {exc}") from exc
 
@@ -281,8 +300,7 @@ class EventRepository:
         )
 
         try:
-            with self._engine.connect() as connection:
-                rows = connection.execute(statement).all()
+            rows = self._read(statement).all()
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось прочитать список events: {exc}") from exc
 
@@ -316,21 +334,18 @@ class EventRepository:
 
     def count(self) -> int:
         try:
-            with self._engine.connect() as connection:
-                return int(connection.execute(select(func.count()).select_from(events)).scalar_one())
+            return int(self._read(select(func.count()).select_from(events)).scalar_one())
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось посчитать events: {exc}") from exc
 
     def count_since(self, moment: datetime) -> int:
         try:
-            with self._engine.connect() as connection:
-                return int(
-                    connection.execute(
-                        select(func.count())
-                        .select_from(events)
-                        .where(events.c.timestamp >= format_utc_fixed(moment))
-                    ).scalar_one()
-                )
+            statement = (
+                select(func.count())
+                .select_from(events)
+                .where(events.c.timestamp >= format_utc_fixed(moment))
+            )
+            return int(self._read(statement).scalar_one())
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось посчитать недавние events: {exc}") from exc
 
@@ -380,8 +395,7 @@ class EventRepository:
         )
 
         try:
-            with self._engine.connect() as connection:
-                row = connection.execute(statement).one_or_none()
+            row = self._read(statement).one_or_none()
         except SQLAlchemyError as exc:
             raise StorageError(f"не удалось найти экземпляр процесса: {exc}") from exc
 
