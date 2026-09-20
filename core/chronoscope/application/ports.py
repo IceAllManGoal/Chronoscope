@@ -29,7 +29,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from types import TracebackType
+from typing import Callable, Protocol
 
 from chronoscope.domain.errors import InvalidInputError
 from chronoscope.domain.events.entity_ref import EntityRef
@@ -104,3 +105,29 @@ class EventRepositoryPort(Protocol):
     ) -> EntityRef | None:
         """Найти экземпляр процесса по PID в пределах boot session (§14, §20)."""
         ...
+
+
+class UnitOfWorkPort(Protocol):
+    """Единица работы: границы транзакции, которыми владеет приложение (§34).
+
+    Репозитории, полученные отсюда, транзакцией не управляют: коммит делает тот,
+    кто открыл единицу работы. Поэтому пакет событий пишется одной транзакцией —
+    одна на пакет вместо двух коммитов на каждое событие (ADR-0004).
+    """
+
+    raw_events: RawEventRepositoryPort
+    events: EventRepositoryPort
+
+    def __enter__(self) -> "UnitOfWorkPort": ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
+
+
+#: Как use case получает единицу работы: реализацию передаёт слой хранения,
+#: приложение о ней не знает.
+UnitOfWorkFactory = Callable[[], UnitOfWorkPort]

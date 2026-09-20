@@ -8,6 +8,11 @@
 нормализация не запускается вообще: иначе повторная доставка того же события
 породила бы второе нормализованное событие с новым идентификатором, и timeline
 заполнился бы дублями.
+
+Транзакцией управляет не этот класс, а вызывающий: ``execute`` открывает
+собственную единицу работы на одно событие, а ``execute_in`` работает внутри
+чужой — той, которую открыл пакет. Логика приёма при этом одна и та же, и
+расходиться двум её копиям негде.
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Callable
 
-from chronoscope.application.ports import EventRepositoryPort, RawEventRepositoryPort
+from chronoscope.application.ports import UnitOfWorkFactory, UnitOfWorkPort
 from chronoscope.domain.errors import InvalidInputError, NormalizationError
 from chronoscope.domain.events.raw_event import RawEvent
 from chronoscope.normalization.registry import NormalizationContext, NormalizerRegistry
@@ -70,23 +75,35 @@ class IngestRawEvent:
     def __init__(
         self,
         *,
-        raw_repository: RawEventRepositoryPort,
-        event_repository: EventRepositoryPort,
+        unit_of_work: UnitOfWorkFactory,
         registry: NormalizerRegistry,
         clock: Callable[[], datetime] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
-        self._raw_repository = raw_repository
-        self._event_repository = event_repository
+        self._unit_of_work = unit_of_work
         self._registry = registry
         self._clock = clock or (lambda: datetime.now(UTC))
         self._logger = logger or logging.getLogger(LOGGER_NAME)
 
     def execute(self, raw_event: RawEvent) -> IngestOutcome:
+        """Принять одно событие в собственной транзакции."""
+        with self._unit_of_work() as unit:
+            return self.execute_in(unit, raw_event)
+
+    def execute_in(self, unit: UnitOfWorkPort, raw_event: RawEvent) -> IngestOutcome:
+        """Принять событие внутри чужой транзакции — так работает пакет (§34).
+
+        Коммит здесь не делается: граница транзакции принадлежит тому, кто её
+        открыл. Отсюда два следствия, и оба нужны. Первое: сырая запись и
+        нормализованное событие оказываются в базе вместе, а не по отдельности —
+        незавершённый пакет Agent отправит снова. Второе: ошибка нормализации
+        внутри пакета не откатывает уже принятые события, потому что §60 требует,
+        чтобы одно плохое событие не останавливало pipeline.
+        """
         ingested_at = self._clock()
 
         try:
-            stored = self._raw_repository.insert(raw_event, ingested_at=ingested_at)
+            stored = unit.raw_events.insert(raw_event, ingested_at=ingested_at)
         except Exception:
             log_event(
                 self._logger,
@@ -109,7 +126,7 @@ class IngestRawEvent:
             )
             return IngestOutcome(raw_event_id=raw_event.raw_event_id, stored=False, normalized=False)
 
-        context = NormalizationContext(find_process_instance=self._event_repository.find_process_instance)
+        context = NormalizationContext(find_process_instance=unit.events.find_process_instance)
 
         try:
             event = self._registry.normalize(raw_event, context)
@@ -132,7 +149,7 @@ class IngestRawEvent:
                 failure=str(exc),
             )
 
-        event_stored = self._event_repository.insert(event, ingested_at=ingested_at)
+        event_stored = unit.events.insert(event, ingested_at=ingested_at)
 
         log_event(
             self._logger,
