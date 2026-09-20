@@ -38,9 +38,15 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Установить uv
-        uses: astral-sh/setup-uv@v10
+        # Точная версия, а не плавающий мажорный тег: начиная с v8 Astral не
+        # публикует теги вида `v10` — существует только `v10.1.0`, и ссылка на
+        # `@v10` валит workflow на этапе «Prepare all required actions».
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
+          # Кэшировать и скачанный managed-интерпретатор: без этого каждый
+          # прогон заново тянет Python 3.13.
+          cache-python: true
 
       - name: Установить Python
         run: uv python install 3.13
