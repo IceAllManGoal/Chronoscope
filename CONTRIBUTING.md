@@ -62,7 +62,7 @@ Chronoscope видит потенциально чувствительные д�
 Windows
 Git
 Python 3.13+
-.NET SDK 8+     — только для Agent
+.NET SDK 8+     — для Agent
 PowerShell
 ```
 
@@ -88,6 +88,15 @@ e2e          — процесс целиком (см. §75)
 Фикстуры для тестов берутся из `shared/fixtures/` — так normalizer тестируется без запуска реальных процессов.
 
 Эти уровни прогоняются в CI на каждый pull request. Правила слоёв §50 проверяются механически, а не только на ревью: `core/tests/test_layer_rules.py` следит, чтобы `domain/` и `normalization/` не импортировали FastAPI, SQLAlchemy, SQLite, HTTP и Windows API.
+
+Тесты Agent прогоняются отдельно:
+
+```powershell
+cd agent
+dotnet test Chronoscope.Agent.sln
+```
+
+Общей для обоих компонентов остаётся не только документация, но и контракт: `shared/schemas/` — тот файл, против которого обязаны сходиться и сериализация Agent, и валидация Core. Изменение схемы без изменения обеих сторон обнаружится именно там.
 
 ## Коммиты и pull requests
 
