@@ -55,6 +55,7 @@ Query API                 GET /api/v1/events
 core/chronoscope/
 ├── api/               HTTP: валидация transport-схемы, вызов use case, сериализация ответа
 ├── application/       use cases: IngestRawEvent, ListEvents, GetEvent
+├── cli/               CLI (§57) — клиент своего же API, а не слой приложения
 ├── domain/            события, сущности, идентификаторы, event types
 ├── normalization/     raw payload → Normalized Event
 ├── infrastructure/    конфигурация, SQLAlchemy, SQLite, логирование
@@ -68,6 +69,7 @@ core/chronoscope/
 - `application/` реализует use cases и координирует repositories, normalizers и транзакции.
 - `infrastructure/` реализует конкретные технологии: SQLite, файловая система, конфигурация, логирование.
 - `api/` принимает HTTP, валидирует transport schema, вызывает use case и сериализует ответ. **API не пишет SQL самостоятельно.**
+- `cli/` — **не слой**, а внешний клиент: он обращается к Core по HTTP, как Agent, и не знает ни про базу, ни про use cases. Живёт в пакете Core потому, что называется так же и читает тот же файл конфигурации (§36); инвариант 10 §81 («UI не читает SQLite напрямую») он соблюдает именно поэтому.
 
 Направление зависимостей:
 

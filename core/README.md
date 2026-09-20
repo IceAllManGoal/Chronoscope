@@ -33,6 +33,26 @@ uv run alembic upgrade head
 uv run python -m chronoscope
 ```
 
+## CLI
+
+Пока Core запущен, историю можно смотреть из другого терминала:
+
+```powershell
+uv run chronoscope status                              # состояние Core, базы и объёмы данных
+uv run chronoscope events                              # список событий
+uv run chronoscope events --type process.started       # с фильтрами
+uv run chronoscope events --limit 5 --cursor <курсор>  # следующая страница
+uv run chronoscope event evt_01K5...                   # подробности одного события
+uv run chronoscope doctor                              # диагностика
+```
+
+CLI — клиент локального API, а не второй доступ к базе: он обращается к Core по
+HTTP и потому не нарушает инвариант 10 (§81). Адрес берётся из того же файла
+конфигурации, что читает Core, и может быть переопределён ключом `--core-url`.
+
+Вернуться к состоянию «Core недоступен» легко: `doctor` и `status` возвращают
+код 2, если Core не отвечает, и подсказывают команду запуска.
+
 Те же команды — `uv sync --all-groups --locked`, `uv run alembic upgrade head` и `uv run pytest` — прогоняются в CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) на каждый pull request и на ветке `main`.
 
 ## Конфигурация

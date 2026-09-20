@@ -1581,8 +1581,16 @@ core/chronoscope/
 ├── analytics/
 │   └── README.md
 │
+├── cli/
+│   ├── client.py
+│   ├── main.py
+│   └── rendering.py
+│
 └── main.py
 ```
+
+`cli/` — не слой приложения, а внешний клиент: он обращается к API Core по HTTP,
+как Agent, и не знает ни про базу, ни про use cases. Появился в 0.0.2 (§57).
 
 ---
 
