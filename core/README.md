@@ -33,6 +33,8 @@ uv run alembic upgrade head
 uv run python -m chronoscope
 ```
 
+Те же команды — `uv sync --all-groups --locked`, `uv run alembic upgrade head` и `uv run pytest` — прогоняются в CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) на каждый pull request и на ветке `main`.
+
 ## Конфигурация
 
 Значения по умолчанию заданы в коде, переопределяются TOML-файлом. Путь к файлу — переменная окружения `CHRONOSCOPE_CONFIG`, иначе `chronoscope.toml` в текущем каталоге. Пример — [`chronoscope.example.toml`](chronoscope.example.toml).
