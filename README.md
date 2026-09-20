@@ -48,7 +48,7 @@ GET /api/v1/events
 |---|---|
 | Структура, документация, ADR | готово |
 | JSON-схемы контракта и фикстуры | готово |
-| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 255 тестов |
+| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 256 тестов |
 | `Chronoscope Agent` и `ProcessCollector` | не начато — без него нет реального сбора из Windows |
 | Frontend | не начато (вне 0.0.1) |
 
@@ -148,7 +148,7 @@ curl "http://127.0.0.1:7342/api/v1/events?type=process.started"
 ```powershell
 cd core
 
-uv run pytest        # 255 тестов: домен, хранилище, нормализатор, контракт, правила слоёв, интеграция
+uv run pytest        # 256 тестов: домен, хранилище, нормализатор, контракт, правила слоёв, интеграция
 uv run pytest -q tests/test_api_integration.py
 ```
 
