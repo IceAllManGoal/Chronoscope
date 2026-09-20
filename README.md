@@ -50,7 +50,7 @@ CLI `chronoscope …`  и  страница http://127.0.0.1:7342/ui/   — по
 |---|---|
 | Структура, документация, ADR | готово |
 | JSON-схемы контракта и фикстуры | готово |
-| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 287 тестов |
+| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 291 тест |
 | **Chronoscope Agent**: `ProcessCollector`, доставка в Core | **готово**, 97 тестов. Ограничение: полнота наблюдения не гарантирована — [`agent/README.md`](agent/README.md) |
 | CLI и локальная страница — 0.0.2 «See» (§77) | готово: `uv run chronoscope …` и http://127.0.0.1:7342/ui/ |
 | Frontend на стеке §55 | не начато: минимальный интерфейс отдаёт сам Core ([ADR-0012](docs/decisions/0012-web-page-served-by-core.md)), стек понадобится к 0.1.0 «Timeline» |
@@ -181,14 +181,21 @@ CLI обращается к Core по HTTP, а не к базе напрямую
 ## Разработка
 
 ```powershell
+pwsh scripts/dev.ps1     # поднять Core и Agent: окружение, миграции, два окна (§63)
+pwsh scripts/test.ps1    # тесты Core и Agent одной командой (§58)
+```
+
+Те же команды вручную, без скриптов:
+
+```powershell
 cd core
-uv run pytest        # 287 тестов: домен, хранилище, нормализатор, контракт, правила слоёв, CLI, страница, интеграция
+uv run pytest        # 291 тест: домен, хранилище, нормализатор, контракт, правила слоёв, CLI, страница, скрипты, интеграция
 
 cd ../agent
 dotnet test Chronoscope.Agent.sln   # 97 тестов: ULID, контракт, конфигурация, буфер, отправка, маппинг процессов
 ```
 
-Оба набора прогоняются в CI на каждый pull request. Правила участия описаны в [`CONTRIBUTING.md`](CONTRIBUTING.md), политика безопасности — в [`SECURITY.md`](SECURITY.md), команды разработки Core — в [`core/README.md`](core/README.md), Agent — в [`agent/README.md`](agent/README.md).
+Оба набора прогоняются в CI на каждый pull request. Правила участия описаны в [`CONTRIBUTING.md`](CONTRIBUTING.md), политика безопасности — в [`SECURITY.md`](SECURITY.md), процесс разработки — в [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md), команды разработки Core — в [`core/README.md`](core/README.md), Agent — в [`agent/README.md`](agent/README.md).
 
 ## Лицензия
 
