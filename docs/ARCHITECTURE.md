@@ -109,8 +109,8 @@ Chronoscope/
 │   ├── tests/
 │   └── pyproject.toml
 │
-├── agent/                      Chronoscope Agent
-│   ├── Chronoscope.Agent.sln
+├── agent/                      Chronoscope Agent — в 0.0.1 каталоги без кода
+│   ├── Chronoscope.Agent.sln   ещё не создан
 │   ├── src/
 │   │   ├── Chronoscope.Agent/
 │   │   └── Chronoscope.Agent.Collectors.Windows/
@@ -130,6 +130,8 @@ Chronoscope/
 **Два проекта Agent, а не четыре.** §48 предлагает `Agent`, `Abstractions`, `Transport` и `Collectors.Windows`. В 0.0.1 фиксируется только одна граница — платформенная, потому что она архитектурно несущая: Windows-зависимый код должен быть отделён от платформенно-нейтрального. `Abstractions` и `Transport` при одном коллекторе и одном транспорте выделяются в проекты, когда появится второй коллектор или второй транспорт (§70, §80).
 
 **`docker-compose.yml` отсутствует.** См. [ADR-0010](decisions/0010-no-containerization-in-0.0.1.md).
+
+**Дерево выше — целевая раскладка, а не снимок.** Фактически созданы `docs/`, `core/`, `shared/`, `scripts/reset-dev-data.ps1` и файлы в корне. `agent/` существует только как каталоги (`.gitkeep`), `scripts/dev.ps1` и `scripts/test.ps1` не созданы, `docs/PRIVACY.md` и `docs/DEVELOPMENT.md` отсутствуют. Список расхождений ведётся в §48 [`PROJECT_SPEC.md`](PROJECT_SPEC.md) — критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре.
 
 ## 6. Доставка, backpressure и идемпотентность
 

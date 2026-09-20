@@ -1470,7 +1470,12 @@ chronoscope/
 │       ├── 0002-agent-core-separation.md
 │       ├── 0003-unified-event-model.md
 │       ├── 0004-sqlite-first.md
-│       └── 0005-raw-event-retention.md
+│       ├── 0005-preserve-raw-events.md
+│       ├── 0006-windows-first.md
+│       ├── 0007-local-only-api.md
+│       ├── 0008-no-microservices.md
+│       ├── 0009-mit-license.md
+│       └── 0010-no-containerization-in-0.0.1.md
 │
 ├── agent/
 │   ├── Chronoscope.Agent.sln
@@ -1510,6 +1515,17 @@ chronoscope/
 │
 └── data/
     └── .gitkeep
+```
+
+Дерево выше — целевая раскладка. Фактическое состояние на момент 0.0.1 (критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре, а не замысла):
+
+```text
+готово       README.md, LICENSE, CONTRIBUTING.md, SECURITY.md, CHANGELOG.md,
+             .editorconfig, .gitignore, docs/, core/, shared/,
+             scripts/reset-dev-data.ps1, data/.gitkeep
+не создано   docs/PRIVACY.md, docs/DEVELOPMENT.md,
+             agent/ целиком — каталоги есть, Chronoscope.Agent.sln и кода нет,
+             scripts/dev.ps1, scripts/test.ps1
 ```
 
 ---
@@ -1658,17 +1674,19 @@ Accepted
 ...
 ```
 
-Первые ADR:
+Принятые ADR (фактический список — [`docs/decisions/README.md`](decisions/README.md)):
 
 ```text
-0001 Use monorepo
-0002 Separate Agent and Core
-0003 Use unified event model
-0004 SQLite-first storage
-0005 Preserve raw events
-0006 Windows-first
-0007 Local-only API
-0008 No microservices
+0001 Использовать monorepo
+0002 Разделить Agent и Core
+0003 Единая модель событий
+0004 SQLite как основная БД в 0.x
+0005 Сохранять raw events до нормализации
+0006 Windows как первая платформа
+0007 API только на loopback
+0008 Modular monolith, без микросервисов
+0009 Лицензия MIT
+0010 Не контейнеризировать в 0.0.1
 ```
 
 ---
@@ -1993,6 +2011,8 @@ DEVELOPMENT.md
 SECURITY.md
 ADRs
 ```
+
+`PRIVACY.md` и `DEVELOPMENT.md` из этого минимума **ещё не созданы**: модель приватности описана только в §37–§38 и в [`SECURITY.md`](../SECURITY.md), а процесс разработки — в [`README.md`](../README.md) и [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 `README.md` — короткий вход. `PROJECT_SPEC.md` — этот документ — объясняет проект глубже.
 
@@ -2552,7 +2572,7 @@ performance tuning
 После создания репозитория:
 
 1. Положить этот документ в `docs/PROJECT_SPEC.md`.
-2. Создать ADR `0001-agent-core-separation.md`.
+2. Создать ADR `0002-agent-core-separation.md` (разделение Agent и Core).
 3. Определить `RawEvent v1` до написания collector.
 4. Определить `Event v1`.
 5. Создать FastAPI health endpoint.
