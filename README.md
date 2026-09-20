@@ -153,6 +153,22 @@ curl "http://127.0.0.1:7342/api/v1/events?type=process.started"
 
 Интерактивная документация API — `http://127.0.0.1:7342/docs`.
 
+## CLI
+
+То же самое, но читаемо, из третьего терминала (пока Core запущен):
+
+```powershell
+cd core
+uv run chronoscope status                          # состояние Core, базы и объёмы данных
+uv run chronoscope events                          # список событий
+uv run chronoscope events --type process.started   # с фильтрами
+uv run chronoscope event evt_01K5...               # подробности одного события
+uv run chronoscope doctor                          # диагностика
+```
+
+CLI обращается к Core по HTTP, а не к базе напрямую, и берёт адрес из того же
+файла конфигурации, что и Core (§36).
+
 ## Разработка
 
 ```powershell
