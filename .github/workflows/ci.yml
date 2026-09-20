@@ -43,10 +43,22 @@ jobs:
         # `@v10` валит workflow на этапе «Prepare all required actions».
         uses: astral-sh/setup-uv@v10.1.0
         with:
+          # Кэшируется только пакетный кэш uv.
           enable-cache: true
-          # Кэшировать и скачанный managed-интерпретатор: без этого каждый
-          # прогон заново тянет Python 3.13.
-          cache-python: true
+          #
+          # cache-python здесь намеренно ВЫКЛЮЧЕН, хотя кэшировал бы скачанный
+          # интерпретатор. Внутри каталога managed-интерпретатора uv держит ссылку
+          # `cpython-3.13-windows-x86_64-none`; при восстановлении кэша на Windows
+          # эта ссылка не удаляется (её цель в кэш не попала), и следующий шаг
+          # падает:
+          #
+          #   error: Failed to create Python minor version link directory
+          #     cause: failed to remove directory ... The directory name is invalid.
+          #     (os error 267)
+          #
+          # Проверено на практике: с cache-python джоба Core tests падала на этом
+          # шаге. Экономия скачивания Python не стоит неработающего pipeline.
+          cache-python: false
 
       - name: Установить Python
         run: uv python install 3.13
