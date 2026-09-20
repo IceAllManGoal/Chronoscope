@@ -90,6 +90,56 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
     return parse_utc(timestamp_raw, "cursor.t"), event_id
 
 
+# ── Запрос списка событий ────────────────────────────────────────────
+
+
+def _build_conditions(query: EventQuery) -> list[Any]:
+    """Условия фильтрации страницы событий (§31)."""
+    conditions: list[Any] = []
+    if query.types:
+        conditions.append(events.c.type.in_(query.types))
+    if query.source is not None:
+        conditions.append(events.c.source == query.source)
+    if query.actor_id is not None:
+        conditions.append(events.c.actor_id == query.actor_id)
+    if query.subject_id is not None:
+        conditions.append(events.c.subject_id == query.subject_id)
+    if query.time_from is not None:
+        conditions.append(events.c.timestamp >= format_utc_fixed(query.time_from))
+    if query.time_to is not None:
+        conditions.append(events.c.timestamp <= format_utc_fixed(query.time_to))
+    return conditions
+
+
+def build_list_statement(query: EventQuery) -> Any:
+    """Построить запрос страницы событий (§31, §32).
+
+    Вынесено отдельной функцией не ради красоты: план этого запроса проверяется
+    тестом (`tests/test_index_coverage.py`), и проверять нужно план **того самого**
+    запроса, которым пользуется репозиторий. Копия запроса в тесте рано или
+    поздно разошлась бы с оригиналом, и тест продолжал бы зеленеть, ничего не
+    проверяя.
+    """
+    conditions = _build_conditions(query)
+
+    if query.cursor is not None:
+        cursor_timestamp, cursor_id = decode_cursor(query.cursor)
+        cursor_timestamp_raw = format_utc_fixed(cursor_timestamp)
+        conditions.append(
+            or_(
+                events.c.timestamp < cursor_timestamp_raw,
+                and_(events.c.timestamp == cursor_timestamp_raw, events.c.id < cursor_id),
+            )
+        )
+
+    return (
+        select(events)
+        .where(and_(*conditions) if conditions else True)  # type: ignore[arg-type]
+        .order_by(events.c.timestamp.desc(), events.c.id.desc())
+        .limit(query.limit + 1)
+    )
+
+
 # ── Преобразование строк БД в доменные объекты ───────────────────────
 
 
@@ -280,24 +330,7 @@ class EventRepository(_Repository):
         поэтому события с одинаковым временем не теряются на границе страницы и
         не дублируются: глубокий ``OFFSET`` для этого непригоден (§32).
         """
-        conditions = self._build_conditions(query)
-
-        if query.cursor is not None:
-            cursor_timestamp, cursor_id = decode_cursor(query.cursor)
-            cursor_timestamp_raw = format_utc_fixed(cursor_timestamp)
-            conditions.append(
-                or_(
-                    events.c.timestamp < cursor_timestamp_raw,
-                    and_(events.c.timestamp == cursor_timestamp_raw, events.c.id < cursor_id),
-                )
-            )
-
-        statement = (
-            select(events)
-            .where(and_(*conditions) if conditions else True)  # type: ignore[arg-type]
-            .order_by(events.c.timestamp.desc(), events.c.id.desc())
-            .limit(query.limit + 1)
-        )
+        statement = build_list_statement(query)
 
         try:
             rows = self._read(statement).all()
@@ -314,23 +347,6 @@ class EventRepository(_Repository):
             next_cursor = encode_cursor(last.timestamp, last.id)
 
         return EventPage(events=page_events, next_cursor=next_cursor)
-
-    @staticmethod
-    def _build_conditions(query: EventQuery) -> list[Any]:
-        conditions: list[Any] = []
-        if query.types:
-            conditions.append(events.c.type.in_(query.types))
-        if query.source is not None:
-            conditions.append(events.c.source == query.source)
-        if query.actor_id is not None:
-            conditions.append(events.c.actor_id == query.actor_id)
-        if query.subject_id is not None:
-            conditions.append(events.c.subject_id == query.subject_id)
-        if query.time_from is not None:
-            conditions.append(events.c.timestamp >= format_utc_fixed(query.time_from))
-        if query.time_to is not None:
-            conditions.append(events.c.timestamp <= format_utc_fixed(query.time_to))
-        return conditions
 
     def count(self) -> int:
         try:
