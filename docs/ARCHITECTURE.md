@@ -109,11 +109,13 @@ Chronoscope/
 │   ├── tests/
 │   └── pyproject.toml
 │
-├── agent/                      Chronoscope Agent — в 0.0.1 каталоги без кода
-│   ├── Chronoscope.Agent.sln   ещё не создан
+├── agent/                      Chronoscope Agent
+│   ├── Chronoscope.Agent.sln
+│   ├── README.md               запуск, конфигурация, измеренная полнота наблюдения
 │   ├── src/
-│   │   ├── Chronoscope.Agent/
-│   │   └── Chronoscope.Agent.Collectors.Windows/
+│   │   ├── Chronoscope.Agent/                     net8.0          нейтральное ядро
+│   │   ├── Chronoscope.Agent.Collectors.Windows/  net8.0-windows  WMI
+│   │   └── Chronoscope.Agent.Host/                net8.0-windows  композиционный корень
 │   └── tests/
 │       └── Chronoscope.Agent.Tests/
 │
@@ -127,11 +129,11 @@ Chronoscope/
 
 ### Решения по структуре
 
-**Два проекта Agent, а не четыре.** §48 предлагает `Agent`, `Abstractions`, `Transport` и `Collectors.Windows`. В 0.0.1 фиксируется только одна граница — платформенная, потому что она архитектурно несущая: Windows-зависимый код должен быть отделён от платформенно-нейтрального. `Abstractions` и `Transport` при одном коллекторе и одном транспорте выделяются в проекты, когда появится второй коллектор или второй транспорт (§70, §80).
+**Три проекта Agent.** §48 предлагает `Agent`, `Abstractions`, `Transport` и `Collectors.Windows`. Здесь зафиксированы три: нейтральное ядро, платформенный коллектор и композиционный корень. `Abstractions` и `Transport` как отдельные проекты по-прежнему не выделяются — при одном коллекторе и одном транспорте выделять под каждый проект не за что (§70, §80). Третий проект появился не из соображений симметрии, а вынужденно: точка входа обязана знать и ядро, и платформенного коллектора, а коллектор обязан ссылаться на ядро ради абстракций — с двумя проектами ссылка оказывается встречной. Полное обоснование и издержки — [ADR-0011](decisions/0011-agent-project-structure.md). Побочная выгода: ядро нацелено на `net8.0`, платформенные проекты на `net8.0-windows`, поэтому платформенную изоляцию проверяет компилятор, а не ревью.
 
 **`docker-compose.yml` отсутствует.** См. [ADR-0010](decisions/0010-no-containerization-in-0.0.1.md).
 
-**Дерево выше — целевая раскладка, а не снимок.** Фактически созданы `docs/`, `core/`, `shared/`, `.github/workflows/ci.yml`, `scripts/reset-dev-data.ps1` и файлы в корне. `agent/` существует только как каталоги (`.gitkeep`), `scripts/dev.ps1` и `scripts/test.ps1` не созданы, `docs/PRIVACY.md` и `docs/DEVELOPMENT.md` отсутствуют. Список расхождений ведётся в §48 [`PROJECT_SPEC.md`](PROJECT_SPEC.md) — критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре.
+**Дерево выше — целевая раскладка, а не снимок.** Фактически созданы `docs/`, `core/`, `agent/`, `shared/`, `.github/workflows/ci.yml`, `scripts/reset-dev-data.ps1` и файлы в корне. `scripts/dev.ps1` и `scripts/test.ps1` не созданы, `docs/PRIVACY.md` и `docs/DEVELOPMENT.md` отсутствуют, `frontend/` вне 0.0.1. Список расхождений ведётся в §48 [`PROJECT_SPEC.md`](PROJECT_SPEC.md) — критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре.
 
 ## 6. Доставка, backpressure и идемпотентность
 

@@ -64,3 +64,29 @@ jobs:
 
       - name: Тесты
         run: uv run pytest
+
+  agent:
+    # Windows-раннер обязателен: проекты Agent нацелены на net8.0-windows
+    # (ADR-0011), потому что платформенная граница проверяется компилятором.
+    # ADR-0006 по той же причине предписывает Windows-раннеры для всего проекта.
+    name: Agent tests
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Установить .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Собрать
+        # Отдельный шаг, чтобы предупреждения компилятора были видны как
+        # предупреждения, а не растворялись в выводе тестов.
+        run: dotnet build Chronoscope.Agent.sln --nologo
+
+      - name: Тесты
+        run: dotnet test Chronoscope.Agent.sln --nologo --no-build

@@ -49,10 +49,10 @@ GET /api/v1/events
 | Структура, документация, ADR | готово |
 | JSON-схемы контракта и фикстуры | готово |
 | **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 256 тестов |
-| `Chronoscope Agent` и `ProcessCollector` | не начато — без него нет реального сбора из Windows |
+| **Chronoscope Agent**: `ProcessCollector`, доставка в Core | **готово** для 0.0.1, 97 тестов. Ограничение: полнота наблюдения не гарантирована — [`agent/README.md`](agent/README.md) |
 | Frontend | не начато (вне 0.0.1) |
 
-Проверено вживую: `POST /api/v1/ingest/raw-events` с фикстурой, выдача `process.started` и `process.exited` для одного и того же экземпляра процесса, отсутствие дубликатов при повторной отправке, сохранение истории после перезапуска Core (§75).
+Проверено вживую: `POST /api/v1/ingest/raw-events` с фикстурой, выдача `process.started` и `process.exited` для одного и того же экземпляра процесса, отсутствие дубликатов при повторной отправке, сохранение истории после перезапуска Core (§75). Отдельно проверен сквозной путь с настоящим Agent: запуск и завершение процесса, наблюдённые через WMI, дошли до API и получили одинаковый `process_instance_id`.
 
 ## Чем Chronoscope является
 
@@ -83,7 +83,7 @@ Chronoscope/
 Windows
 Git
 Python 3.13+
-.NET SDK 8+     — понадобится только для Agent
+.NET SDK 8+     — для Agent
 PowerShell
 ```
 
@@ -119,6 +119,16 @@ Core слушает `127.0.0.1:7342`. Проверка:
 curl http://127.0.0.1:7342/api/v1/health
 ```
 
+Запустить Agent — второй терминал (§63). Он читает тот же файл конфигурации, что и
+Core, и берёт адрес из его секции `[core]`:
+
+```powershell
+dotnet run --project agent/src/Chronoscope.Agent.Host
+```
+
+Точка входа — `Chronoscope.Agent.Host`, а не `Chronoscope.Agent`: композиционный
+корень вынесен в отдельный проект, см. [ADR-0011](docs/decisions/0011-agent-project-structure.md).
+
 Отправить тестовые события из фикстуры:
 
 ```powershell
@@ -147,12 +157,13 @@ curl "http://127.0.0.1:7342/api/v1/events?type=process.started"
 
 ```powershell
 cd core
-
 uv run pytest        # 256 тестов: домен, хранилище, нормализатор, контракт, правила слоёв, интеграция
-uv run pytest -q tests/test_api_integration.py
+
+cd ../agent
+dotnet test Chronoscope.Agent.sln   # 97 тестов: ULID, контракт, конфигурация, буфер, отправка, маппинг процессов
 ```
 
-Правила участия описаны в [`CONTRIBUTING.md`](CONTRIBUTING.md), политика безопасности — в [`SECURITY.md`](SECURITY.md), команды разработки Core — в [`core/README.md`](core/README.md).
+Оба набора прогоняются в CI на каждый pull request. Правила участия описаны в [`CONTRIBUTING.md`](CONTRIBUTING.md), политика безопасности — в [`SECURITY.md`](SECURITY.md), команды разработки Core — в [`core/README.md`](core/README.md), Agent — в [`agent/README.md`](agent/README.md).
 
 ## Лицензия
 

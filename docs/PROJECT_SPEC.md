@@ -1479,14 +1479,13 @@ chronoscope/
 │
 ├── agent/
 │   ├── Chronoscope.Agent.sln
+│   ├── README.md
 │   ├── src/
-│   │   ├── Chronoscope.Agent/
-│   │   ├── Chronoscope.Agent.Abstractions/
-│   │   ├── Chronoscope.Agent.Transport/
-│   │   └── Chronoscope.Agent.Collectors.Windows/
+│   │   ├── Chronoscope.Agent/                     net8.0          нейтральное ядро
+│   │   ├── Chronoscope.Agent.Collectors.Windows/  net8.0-windows  WMI
+│   │   └── Chronoscope.Agent.Host/                net8.0-windows  композиционный корень
 │   └── tests/
-│       ├── Chronoscope.Agent.Tests/
-│       └── Chronoscope.Agent.Collectors.Windows.Tests/
+│       └── Chronoscope.Agent.Tests/
 │
 ├── core/
 │   ├── pyproject.toml
@@ -1521,13 +1520,17 @@ chronoscope/
 
 ```text
 готово       README.md, LICENSE, CONTRIBUTING.md, SECURITY.md, CHANGELOG.md,
-             .editorconfig, .gitignore, docs/, core/, shared/,
+             .editorconfig, .gitignore, docs/, core/, agent/, shared/,
              .github/workflows/ci.yml,
              scripts/reset-dev-data.ps1, data/.gitkeep
 не создано   docs/PRIVACY.md, docs/DEVELOPMENT.md,
-             agent/ целиком — каталоги есть, Chronoscope.Agent.sln и кода нет,
-             scripts/dev.ps1, scripts/test.ps1
+             scripts/dev.ps1, scripts/test.ps1,
+             frontend/ (вне 0.0.1)
 ```
+
+Состав Agent зафиксирован тремя проектами, а не четырьмя из §48: нейтральное
+ядро, платформенный коллектор и композиционный корень. Обоснование —
+[ADR-0011](decisions/0011-agent-project-structure.md).
 
 ---
 
