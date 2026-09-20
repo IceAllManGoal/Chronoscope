@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Callable, Iterator
 
 from fastapi import Depends, Request
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 
 from chronoscope import __version__
 from chronoscope.application.ingest.ingest_batch import IngestBatch
@@ -22,7 +22,7 @@ from chronoscope.application.queries.core_status import GetCoreStatus
 from chronoscope.application.queries.get_event import GetEvent
 from chronoscope.application.queries.list_events import ListEvents
 from chronoscope.infrastructure.config.settings import CoreSettings
-from chronoscope.infrastructure.database.engine import create_database_engine
+from chronoscope.infrastructure.database.engine import create_database_engine, missing_tables
 from chronoscope.infrastructure.database.repositories import (
     EventRepository,
     RawEventRepository,
@@ -83,12 +83,39 @@ class CoreContainer:
             get_core_status=GetCoreStatus(
                 raw_repository=raw_repository,
                 event_repository=event_repository,
-                settings=settings,
+                # Передаётся значение, а не объект настроек: use case нужен путь
+                # к базе, а не конфигурация инфраструктуры (§50).
+                database_path=settings.database_path,
                 version=version,
                 clock=clock,
             ),
             version=version,
         )
+
+    def database_state(self) -> str:
+        """Состояние хранилища для ``/health`` и ``/status``: ``ok``, ``error``, ``schema_missing``.
+
+        Проверка живёт в композиционном корне, а не в слое API, потому что
+        обращается к движку базы: движок знает только корень (§50), а API
+        отвечает за форму ответа, а не за доступ к хранилищу.
+
+        Ответ «``database: ok``» обязан означать выполненную проверку, а не факт
+        успешного запуска процесса: иначе эндпоинт сообщал бы о здоровье системы,
+        ничего о ней не зная. Различаются два отказа: недоступная база (``error``)
+        и доступная база без применённых миграций (``schema_missing``). Во втором
+        случае соединение работает и ``SELECT 1`` проходит, поэтому без отдельной
+        проверки схемы Core отрапортовал бы «ok» при полностью нерабочем API.
+        """
+        try:
+            with self.engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+        except Exception:  # noqa: BLE001 - любая ошибка доступа означает недоступную БД
+            return "error"
+
+        if missing_tables(self.engine):
+            return "schema_missing"
+
+        return "ok"
 
     def close(self) -> None:
         self.engine.dispose()

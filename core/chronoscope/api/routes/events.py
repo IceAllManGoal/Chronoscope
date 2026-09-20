@@ -9,15 +9,15 @@ from fastapi import status as http_status
 
 from chronoscope.api.dependencies import get_get_event, get_list_events
 from chronoscope.api.schemas import ErrorOut, EventListOut, EventOut
-from chronoscope.application.queries.get_event import GetEvent
-from chronoscope.application.queries.list_events import ListEvents
-from chronoscope.domain.errors import InvalidInputError
-from chronoscope.domain.validation import require_utc
-from chronoscope.infrastructure.database.repositories import (
+from chronoscope.application.ports import (
     DEFAULT_PAGE_LIMIT,
     MAX_PAGE_LIMIT,
     EventQuery,
 )
+from chronoscope.application.queries.get_event import GetEvent
+from chronoscope.application.queries.list_events import ListEvents
+from chronoscope.domain.errors import InvalidInputError
+from chronoscope.domain.validation import require_utc
 
 router = APIRouter(tags=["events"])
 

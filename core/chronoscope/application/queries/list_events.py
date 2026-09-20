@@ -8,15 +8,15 @@
 
 from __future__ import annotations
 
-from chronoscope.infrastructure.database.repositories import (
+from chronoscope.application.ports import (
     EventPage,
     EventQuery,
-    EventRepository,
+    EventRepositoryPort,
 )
 
 
 class ListEvents:
-    def __init__(self, event_repository: EventRepository) -> None:
+    def __init__(self, event_repository: EventRepositoryPort) -> None:
         self._event_repository = event_repository
 
     def execute(self, query: EventQuery) -> EventPage:

@@ -7,12 +7,12 @@
 
 from __future__ import annotations
 
+from chronoscope.application.ports import EventRepositoryPort
 from chronoscope.domain.events.event import Event
-from chronoscope.infrastructure.database.repositories import EventRepository
 
 
 class GetEvent:
-    def __init__(self, event_repository: EventRepository) -> None:
+    def __init__(self, event_repository: EventRepositoryPort) -> None:
         self._event_repository = event_repository
 
     def execute(self, event_id: str) -> Event | None:

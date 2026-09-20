@@ -35,7 +35,16 @@ from chronoscope.domain.errors import (
     StorageError,
     UnsupportedSchemaVersionError,
 )
-from chronoscope.infrastructure.logging.setup import get_logger, log_event
+
+#: Иерархия логгеров Chronoscope (§35). Обработчики и JSON-формат настраивает
+#: infrastructure; слой API обязан знать только имя иерархии и то, что поле
+#: ``event`` становится машинным идентификатором записи.
+LOGGER_NAME = "chronoscope.api"
+
+
+def log_event(logger: logging.Logger, level: int, event: str, message: str, **fields: object) -> None:
+    """Записать структурированное событие лога через стандартный API logging."""
+    logger.log(level, message, extra={"event": event, **fields})
 
 STATUS_BY_EXCEPTION: dict[type[Exception], tuple[int, str]] = {
     UnsupportedSchemaVersionError: (422, "unsupported_schema_version"),
@@ -68,7 +77,7 @@ def error_response(
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    logger = get_logger("api")
+    logger = logging.getLogger(LOGGER_NAME)
 
     @app.exception_handler(UnsupportedSchemaVersionError)
     async def _unsupported_schema(_request: Request, exc: UnsupportedSchemaVersionError) -> JSONResponse:

@@ -18,10 +18,9 @@ from chronoscope.domain.events.event_type import (
     PROCESS_EXITED,
     PROCESS_STARTED,
 )
+from chronoscope.application.ports import MAX_PAGE_LIMIT, EventQuery
 from chronoscope.domain.ids import new_event_id
 from chronoscope.infrastructure.database.repositories import (
-    MAX_PAGE_LIMIT,
-    EventQuery,
     decode_cursor,
     encode_cursor,
 )

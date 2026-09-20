@@ -15,21 +15,40 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Callable
+from typing import Any, Callable
 
+from chronoscope.application.ports import EventRepositoryPort, RawEventRepositoryPort
 from chronoscope.domain.errors import InvalidInputError, NormalizationError
 from chronoscope.domain.events.raw_event import RawEvent
-from chronoscope.infrastructure.database.repositories import (
-    EventRepository,
-    RawEventRepository,
-)
-from chronoscope.infrastructure.logging.setup import get_logger, log_event
 from chronoscope.normalization.registry import NormalizationContext, NormalizerRegistry
+
+#: Имя логгера внутри иерархии Chronoscope. Обработчики и JSON-формат настраивает
+#: infrastructure (§35); здесь важно только попасть в ту же иерархию. Постоянная
+#: часть имени повторена осознанно: импортировать её из infrastructure означало бы
+#: вернуть зависимость application от слоя технологий ради одной строки (§50).
+LOGGER_NAME = "chronoscope.ingest"
 
 #: Ошибки, которые считаются сбоем нормализации, а не сбоем Core.
 #: ``InvalidInputError`` попадает сюда потому, что некорректный payload
 #: источника — это дефект данных, а не отказ системы (§60).
 NORMALIZATION_FAILURES = (NormalizationError, InvalidInputError)
+
+
+def log_event(
+    logger: logging.Logger,
+    level: int,
+    event: str,
+    message: str,
+    **fields: Any,
+) -> None:
+    """Записать структурированное событие лога.
+
+    Используется стандартный API ``logging``, а не помощник из infrastructure:
+    произвольные поля становятся полями JSON-записи, а это единственное, что
+    должен знать application. Как именно они попадут в вывод — забота слоя,
+    который настраивает обработчики (§35, §50).
+    """
+    logger.log(level, message, extra={"event": event, **fields})
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,8 +70,8 @@ class IngestRawEvent:
     def __init__(
         self,
         *,
-        raw_repository: RawEventRepository,
-        event_repository: EventRepository,
+        raw_repository: RawEventRepositoryPort,
+        event_repository: EventRepositoryPort,
         registry: NormalizerRegistry,
         clock: Callable[[], datetime] | None = None,
         logger: logging.Logger | None = None,
@@ -61,7 +80,7 @@ class IngestRawEvent:
         self._event_repository = event_repository
         self._registry = registry
         self._clock = clock or (lambda: datetime.now(UTC))
-        self._logger = logger or get_logger("ingest")
+        self._logger = logger or logging.getLogger(LOGGER_NAME)
 
     def execute(self, raw_event: RawEvent) -> IngestOutcome:
         ingested_at = self._clock()
