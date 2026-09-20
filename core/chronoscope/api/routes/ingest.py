@@ -15,6 +15,13 @@
 422  ни одно событие пакета не прошло валидацию: сигнал клиенту, что он
      отправляет данные, которые Core не понимает вообще
 ```
+
+Код ошибки при полном отказе зависит от причины, и это не деталь оформления.
+§52 требует отличать неподдерживаемую версию схемы (несовместимость версий
+Agent и Core) от обычного дефекта данных (§60), поэтому пакет, отвергнутый
+целиком **только** из-за версии схемы, отвечает ``unsupported_schema_version``,
+а не обезличенным ``invalid_input``: иначе один и тот же дефект описывался бы
+по-разному в зависимости от размера пакета.
 """
 
 from __future__ import annotations
@@ -34,6 +41,7 @@ from chronoscope.api.schemas import (
 )
 from chronoscope.application.ingest.ingest_batch import IngestBatch
 from chronoscope.domain.errors import (
+    ChronoscopeError,
     InvalidInputError,
     UnsupportedSchemaVersionError,
 )
@@ -49,12 +57,19 @@ _MAX_REPORTED_REJECTIONS_IN_MESSAGE = 3
 
 
 class _RejectedItem(Exception):
-    """Внутренний сигнал: конкретное событие пакета не прошло валидацию."""
+    """Внутренний сигнал: конкретное событие пакета не прошло валидацию.
 
-    def __init__(self, *, code: str, message: str) -> None:
+    ``error`` хранит исходное исключение домена там, где оно несёт информацию,
+    которую нельзя восстановить из текста: у ``UnsupportedSchemaVersionError``
+    это полученная и поддерживаемая версии. Если пакет отвергнут целиком, наружу
+    возвращается именно оно, а не пересказ в виде ``invalid_input``.
+    """
+
+    def __init__(self, *, code: str, message: str, error: ChronoscopeError | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.error = error
 
 
 def _summarize_validation_error(exc: ValidationError) -> str:
@@ -90,9 +105,41 @@ def _to_domain(item: dict[str, Any]) -> RawEvent:
             payload=model.payload,
         )
     except UnsupportedSchemaVersionError as exc:
-        raise _RejectedItem(code=CODE_UNSUPPORTED_SCHEMA, message=str(exc)) from exc
+        raise _RejectedItem(
+            code=CODE_UNSUPPORTED_SCHEMA, message=str(exc), error=exc
+        ) from exc
     except InvalidInputError as exc:
         raise _RejectedItem(code=CODE_INVALID_INPUT, message=str(exc)) from exc
+
+
+def _batch_error(rejected: list[tuple[int, _RejectedItem]], total: int) -> ChronoscopeError:
+    """Собрать ошибку на весь пакет: ни одно событие не принято.
+
+    Если единственная причина отказа — версия схемы, наружу уходит
+    ``UnsupportedSchemaVersionError``: §52 требует отвергать такую версию явно,
+    а §60 — различать категории отказов, и обезличенный ``invalid_input`` здесь
+    терял бы ровно то различение, которого спека требует.
+
+    Смешанные причины сводятся к ``invalid_input``: назвать одну из них значило
+    бы соврать о содержимом пакета, а перечислять их в коде ошибки — превращать
+    машинный код в текст.
+    """
+    if all(item.code == CODE_UNSUPPORTED_SCHEMA for _, item in rejected):
+        versions: list[object] = []
+        for _, item in rejected:
+            received = getattr(item.error, "received", None)
+            if received not in versions:
+                versions.append(received)
+        return UnsupportedSchemaVersionError(
+            received=versions[0] if len(versions) == 1 else versions,
+            supported=SUPPORTED_SCHEMA_VERSION,
+        )
+
+    reasons = "; ".join(
+        f"[{index}] {item.message}"
+        for index, item in rejected[:_MAX_REPORTED_REJECTIONS_IN_MESSAGE]
+    )
+    return InvalidInputError(f"ни одно из {total} событий пакета не прошло валидацию: {reasons}")
 
 
 @router.post(
@@ -112,21 +159,16 @@ def ingest(
         )
 
     accepted: list[RawEvent] = []
-    rejected: list[RejectedEventOut] = []
+    rejected: list[tuple[int, _RejectedItem]] = []
 
     for index, item in enumerate(payload.events):
         try:
             accepted.append(_to_domain(item))
         except _RejectedItem as rejection:
-            rejected.append(
-                RejectedEventOut(index=index, code=rejection.code, message=rejection.message)
-            )
+            rejected.append((index, rejection))
 
     if not accepted and rejected:
-        reasons = "; ".join(f"[{item.index}] {item.message}" for item in rejected[:_MAX_REPORTED_REJECTIONS_IN_MESSAGE])
-        raise InvalidInputError(
-            f"ни одно из {len(payload.events)} событий пакета не прошло валидацию: {reasons}"
-        )
+        raise _batch_error(rejected, len(payload.events))
 
     outcome = use_case.execute(accepted)
 
@@ -134,5 +176,8 @@ def ingest(
         accepted=outcome.accepted,
         duplicates=outcome.duplicates,
         normalization_failed=outcome.normalization_failed,
-        rejected=rejected,
+        rejected=[
+            RejectedEventOut(index=index, code=item.code, message=item.message)
+            for index, item in rejected
+        ],
     )

@@ -242,9 +242,39 @@ class TestIngestRobustness:
         assert response.status_code == 422
 
     def test_unsupported_event_schema_version_is_named(self, client: TestClient) -> None:
-        """§52: неподдерживаемая версия схемы отвергается явно и отличается от прочих ошибок."""
+        """§52: неподдерживаемая версия схемы отвергается явно и отличается от прочих ошибок.
+
+        Пакет из одного такого события отвергается целиком, и код ошибки обязан
+        совпасть с кодом отвергнутого элемента: иначе один и тот же дефект
+        данных описывался бы по-разному в зависимости от состава пакета.
+        """
         event = {**load_fixture("windows", "process_start_001.json"), "schema_version": 99}
         response = post_events(client, [event])
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "unsupported_schema_version"
+        assert "99" in response.json()["error"]["message"]
+
+    def test_unsupported_schema_in_mixed_batch_names_the_rejected_item(self, client: TestClient) -> None:
+        """Событие с чужой версией отвергается поштучно и не мешает остальным (§60)."""
+        good = load_fixture("windows", "process_start_001.json")
+        bad = {**load_fixture("windows", "process_exit_001.json"), "schema_version": 99}
+
+        body = post_events(client, [good, bad]).json()
+
+        assert body["accepted"] == 1
+        assert body["rejected"] == [
+            {
+                "index": 1,
+                "code": "unsupported_schema_version",
+                "message": body["rejected"][0]["message"],
+            }
+        ]
+
+    def test_mixed_rejection_reasons_fall_back_to_invalid_input(self, client: TestClient) -> None:
+        """Когда причины отказа разные, обобщающий код честнее любой одной из них."""
+        bad_version = {**load_fixture("windows", "process_start_001.json"), "schema_version": 99}
+        response = post_events(client, [bad_version, {"broken": True}])
 
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "invalid_input"
