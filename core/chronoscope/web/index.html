@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronoscope — история компьютера</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Chronoscope</h1>
+    <p class="sub">История компьютера, которую можно исследовать</p>
+  </div>
+  <div class="state">
+    <span id="core-state" class="badge badge-wait">проверяю Core…</span>
+  </div>
+</header>
+
+<form id="filters" class="filters">
+  <label>Тип события
+    <input type="text" id="filter-type" placeholder="process.started, process.exited" autocomplete="off">
+  </label>
+  <label>Источник
+    <input type="text" id="filter-source" placeholder="windows.process" autocomplete="off">
+  </label>
+  <label>С
+    <input type="datetime-local" id="filter-from" step="1">
+  </label>
+  <label>По
+    <input type="datetime-local" id="filter-to" step="1">
+  </label>
+  <label>На странице
+    <input type="number" id="filter-limit" value="25" min="1" max="200">
+  </label>
+  <div class="filters-actions">
+    <button type="submit">Показать</button>
+    <button type="button" id="reset" class="ghost">Сбросить</button>
+  </div>
+</form>
+
+<p id="message" class="message" hidden></p>
+
+<main>
+  <section class="list">
+    <table id="events">
+      <thead>
+        <tr>
+          <th>Время</th>
+          <th>Тип</th>
+          <th>Субъект</th>
+          <th>Идентификатор</th>
+        </tr>
+      </thead>
+      <tbody id="events-body"></tbody>
+    </table>
+    <p id="events-empty" class="empty" hidden>Событий нет.</p>
+
+    <nav class="pager">
+      <button type="button" id="prev" disabled>← Назад</button>
+      <span id="page-info" class="page-info"></span>
+      <button type="button" id="next" disabled>Дальше →</button>
+    </nav>
+  </section>
+
+  <aside class="detail" id="detail">
+    <h2>Подробности</h2>
+    <p class="hint">Выбери событие слева.</p>
+  </aside>
+</main>
+
+<footer class="bottom">
+  <p>
+    Страница — клиент локального API: она обращается к Core по HTTP и не читает
+    базу напрямую (§81, инвариант 10). Подробнее — <code>docs/decisions/0012-web-page-served-by-core.md</code>.
+  </p>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
