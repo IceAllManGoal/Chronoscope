@@ -1516,16 +1516,16 @@ chronoscope/
     └── .gitkeep
 ```
 
-Дерево выше — целевая раскладка. Фактическое состояние на момент 0.0.1 (критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре, а не замысла):
+Дерево выше — целевая раскладка. Фактическое состояние на момент 0.0.2 (критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре, а не замыслу):
 
 ```text
 готово       README.md, LICENSE, CONTRIBUTING.md, SECURITY.md, CHANGELOG.md,
              .editorconfig, .gitignore, docs/, core/, agent/, shared/,
              .github/workflows/ci.yml,
+             docs/PRIVACY.md, docs/DEVELOPMENT.md,
              scripts/reset-dev-data.ps1, data/.gitkeep
-не создано   docs/PRIVACY.md, docs/DEVELOPMENT.md,
-             scripts/dev.ps1, scripts/test.ps1,
-             frontend/ (вне 0.0.1)
+не создано   scripts/dev.ps1, scripts/test.ps1,
+             frontend/ (зарезервирован под стек §55 — нужен к 0.1.0)
 ```
 
 Состав Agent зафиксирован тремя проектами, а не четырьмя из §48: нейтральное
@@ -2033,7 +2033,7 @@ SECURITY.md
 ADRs
 ```
 
-`PRIVACY.md` и `DEVELOPMENT.md` из этого минимума **ещё не созданы**: модель приватности описана только в §37–§38 и в [`SECURITY.md`](../SECURITY.md), а процесс разработки — в [`README.md`](../README.md) и [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+`PRIVACY.md` и `DEVELOPMENT.md` созданы в 0.0.2. [`docs/PRIVACY.md`](PRIVACY.md) описывает **фактическое** состояние приватности: что собирается по умолчанию, что не собирается вовсе, где лежат данные, что попадает в логи, как работает redaction и что остаётся незащищённым. [`docs/DEVELOPMENT.md`](DEVELOPMENT.md) описывает процесс: окружение, запуск, уровни тестов, правила слоёв, состав CI, правила `main` и процедуру выпуска версии. Оба ссылаются на §37–§38 и §63–§65, а не заменяют их: спека объясняет замысел, эти документы — состояние.
 
 `README.md` — короткий вход. `PROJECT_SPEC.md` — этот документ — объясняет проект глубже.
 

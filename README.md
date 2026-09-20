@@ -99,6 +99,8 @@ Docker не требуется: Chronoscope — локальный продук�
 | [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) | Главный продуктовый и технический документ проекта |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Компоненты, слои, поток данных, структура репозитория |
 | [`docs/EVENT_MODEL.md`](docs/EVENT_MODEL.md) | Модель `RawEvent` и `Event`, идентификаторы, время, версионирование схем |
+| [`docs/PRIVACY.md`](docs/PRIVACY.md) | Что собирается, где хранится, что **не** защищено |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Окружение, тесты, CI, правила слоёв, выпуск версии |
 | [`docs/decisions/`](docs/decisions/) | Architecture Decision Records |
 
 ## Быстрый старт
