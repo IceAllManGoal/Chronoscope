@@ -130,3 +130,27 @@ class TestDatabaseLocation:
         url = build_database_url(CoreSettings().database_path)
         assert url.startswith("sqlite+pysqlite:///")
         assert (tmp_path / "data" / "chronoscope.db").as_posix() in url
+
+
+class TestAlembicConfig:
+    def test_ini_is_pure_ascii(self) -> None:
+        """alembic.ini обязан оставаться ASCII, иначе миграции падают на Windows.
+
+        Alembic читает конфигурацию в locale-кодировке, а не в UTF-8
+        (``alembic/util/compat.py``: ``file_config.read(..., encoding="locale")``).
+        Кодировка следует системной кодовой странице: при cp1252 (Западная
+        Европа) не-ASCII байт роняет ``alembic upgrade head`` с
+        UnicodeDecodeError, при cp1251 (Россия) тот же байт молча декодируется в
+        мусор — поэтому локально дефект не виден, а на windows-раннере CI виден.
+
+        ``PYTHONUTF8=1`` здесь не спасает: ``locale.getencoding()`` намеренно
+        игнорирует UTF-8-режим Python.
+        """
+        non_ascii = [
+            (index, byte) for index, byte in enumerate(ALEMBIC_INI.read_bytes()) if byte > 127
+        ]
+
+        assert non_ascii == [], (
+            "alembic.ini должен быть ASCII: alembic читает его в locale-кодировке. "
+            f"Не-ASCII байты (позиция, байт): {non_ascii[:10]}"
+        )
