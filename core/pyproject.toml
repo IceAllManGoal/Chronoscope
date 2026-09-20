@@ -1,6 +1,6 @@
 [project]
 name = "chronoscope"
-version = "0.0.1"
+version = "0.0.2"
 description = "Chronoscope Core — local-first recorder of structured system events"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -21,6 +21,11 @@ dev = [
     "jsonschema>=4.23",
     "rfc3339-validator>=0.1.4",
 ]
+
+[project.scripts]
+# CLI (§57). Живёт в пакете Core, потому что обращается к нему же и называется
+# так же; зависимости не добавляет — транспорт на стандартной библиотеке.
+chronoscope = "chronoscope.cli.main:main"
 
 [build-system]
 requires = ["hatchling"]
