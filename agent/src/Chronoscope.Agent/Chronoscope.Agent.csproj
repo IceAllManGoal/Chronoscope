@@ -1,18 +1,24 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\Chronoscope.Agent.Collectors.Windows\Chronoscope.Agent.Collectors.Windows.csproj" />
-  </ItemGroup>
+  <!--
+    Платформенно-нейтральное ядро Agent: контракт, идентичность, конфигурация,
+    транспорт, абстракции коллекторов и логирование. Библиотека, а не исполняемый
+    проект: точкой входа владеет Chronoscope.Agent.Host, потому что композиционный
+    корень обязан знать и ядро, и платформенный коллектор, а платформенный
+    коллектор ссылается на ядро. Если бы точка входа жила здесь, ссылка была бы
+    встречной и проект не собрался бы.
+
+    OutputType намеренно не задан: проект не содержит точки входа.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Chronoscope.Agent</RootNamespace>
+  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Tomlyn" Version="2.10.1" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
 
 </Project>
