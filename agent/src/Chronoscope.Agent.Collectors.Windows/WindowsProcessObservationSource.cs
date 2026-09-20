@@ -145,7 +145,13 @@ public sealed class WindowsProcessObservationSource : IProcessObservationSource
             ProcessId = processId,
             ParentProcessId = ReadNullableInt(process, "ParentProcessId"),
             Name = string.IsNullOrEmpty(name) ? tracked?.Name ?? string.Empty : name,
-            StartedAt = tracked?.StartedAt ?? ReadCreationDate(process) ?? DateTimeOffset.UtcNow,
+            // Сначала собственное утверждение источника, и только потом память о
+            // запуске. Наблюдение подтвердило, что событие удаления несёт
+            // CreationDate, а память может устареть: если событие выхода было
+            // пропущено, а PID успел переиспользоваться, запомненное время старта
+            // относится уже к другому процессу — и Core вывел бы по нему
+            // идентичность не того экземпляра (§14).
+            StartedAt = ReadCreationDate(process) ?? tracked?.StartedAt ?? DateTimeOffset.UtcNow,
             IsExit = true,
             ExitedAt = DateTimeOffset.UtcNow,
         });
