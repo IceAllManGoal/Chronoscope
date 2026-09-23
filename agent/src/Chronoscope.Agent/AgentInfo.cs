@@ -9,5 +9,5 @@ namespace Chronoscope.Agent;
 /// </summary>
 public static class AgentInfo
 {
-    public const string Version = "0.0.2";
+    public const string Version = "0.0.3";
 }
