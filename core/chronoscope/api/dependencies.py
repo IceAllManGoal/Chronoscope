@@ -20,6 +20,7 @@ from chronoscope.application.ingest.ingest_batch import IngestBatch
 from chronoscope.application.ingest.ingest_raw_event import IngestRawEvent
 from chronoscope.application.queries.core_status import GetCoreStatus
 from chronoscope.application.queries.get_event import GetEvent
+from chronoscope.application.queries.get_process_detail import GetProcessDetail
 from chronoscope.application.queries.list_events import ListEvents
 from chronoscope.infrastructure.config.settings import CoreSettings
 from chronoscope.infrastructure.database.engine import create_database_engine, missing_tables
@@ -44,6 +45,7 @@ class CoreContainer:
     ingest_batch: IngestBatch
     list_events: ListEvents
     get_event: GetEvent
+    get_process_detail: GetProcessDetail
     get_core_status: GetCoreStatus
     version: str
 
@@ -88,6 +90,7 @@ class CoreContainer:
             ingest_batch=IngestBatch(ingest_raw_event, unit_of_work),
             list_events=ListEvents(event_repository),
             get_event=GetEvent(event_repository),
+            get_process_detail=GetProcessDetail(event_repository),
             get_core_status=GetCoreStatus(
                 raw_repository=raw_repository,
                 event_repository=event_repository,
@@ -155,6 +158,10 @@ def get_get_event(container: CoreContainer = Depends(get_container)) -> GetEvent
     return container.get_event
 
 
+def get_get_process_detail(container: CoreContainer = Depends(get_container)) -> GetProcessDetail:
+    return container.get_process_detail
+
+
 def get_get_core_status(container: CoreContainer = Depends(get_container)) -> GetCoreStatus:
     return container.get_core_status
 
@@ -167,4 +174,5 @@ def iter_dependencies(container: CoreContainer) -> Iterator[object]:
     yield container.ingest_batch
     yield container.list_events
     yield container.get_event
+    yield container.get_process_detail
     yield container.get_core_status

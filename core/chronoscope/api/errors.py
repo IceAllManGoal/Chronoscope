@@ -12,11 +12,17 @@ unsupported schema version   422  unsupported_schema_version
 database failure             500  storage_failure
 not found                    404  not_found
 request too large            413  request_too_large
+history limit exceeded       500  history_limit_exceeded
 ```
 
 Дубликат события намеренно **не** является ошибкой: §34 требует
 идемпотентности при at-least-once доставке, поэтому повторная отправка —
 нормальная ситуация, и о ней сообщается счётчиком в успешном ответе.
+
+Отдельный код у превышенного предела истории нужен потому, что это не отказ
+хранилища и не «не найдено»: запрос корректен, база работает, но ответить
+честно на него нельзя — detail по неполной истории сообщил бы о процессе то,
+чего в данных нет.
 """
 
 from __future__ import annotations
@@ -31,6 +37,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from chronoscope.api.schemas import ErrorDetail, ErrorOut
 from chronoscope.domain.errors import (
     ChronoscopeError,
+    HistoryLimitExceededError,
     InvalidInputError,
     StorageError,
     UnsupportedSchemaVersionError,
@@ -50,6 +57,7 @@ STATUS_BY_EXCEPTION: dict[type[Exception], tuple[int, str]] = {
     UnsupportedSchemaVersionError: (422, "unsupported_schema_version"),
     InvalidInputError: (422, "invalid_input"),
     StorageError: (500, "storage_failure"),
+    HistoryLimitExceededError: (500, "history_limit_exceeded"),
 }
 
 _STATUS_CODES = {
@@ -101,6 +109,20 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _storage_failure(_request: Request, exc: StorageError) -> JSONResponse:
         log_event(logger, logging.ERROR, "storage_failure", str(exc))
         status_code, code = STATUS_BY_EXCEPTION[StorageError]
+        return error_response(status_code=status_code, code=code, message=str(exc))
+
+    @app.exception_handler(HistoryLimitExceededError)
+    async def _history_limit(_request: Request, exc: HistoryLimitExceededError) -> JSONResponse:
+        """Усечённый detail не отдаётся молча: отказ виден и в логе, и в ответе."""
+        log_event(
+            logger,
+            logging.ERROR,
+            "history_limit_exceeded",
+            str(exc),
+            process_instance_id=exc.process_instance_id,
+            limit=exc.limit,
+        )
+        status_code, code = STATUS_BY_EXCEPTION[HistoryLimitExceededError]
         return error_response(status_code=status_code, code=code, message=str(exc))
 
     @app.exception_handler(RequestValidationError)

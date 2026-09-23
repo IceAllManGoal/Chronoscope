@@ -19,7 +19,10 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 
 from chronoscope.application.ports import EventQuery
-from chronoscope.infrastructure.database.repositories import build_list_statement
+from chronoscope.infrastructure.database.repositories import (
+    build_instance_events_statement,
+    build_list_statement,
+)
 
 EXPECTED_INDEX_COLUMNS = {
     "ix_events_timestamp": ["timestamp", "id"],
@@ -41,7 +44,11 @@ QUERIES = {
 
 def query_plan(engine: Engine, query: EventQuery) -> list[str]:
     """План выполнения того запроса, который строит репозиторий."""
-    statement = build_list_statement(query)
+    return statement_plan(engine, build_list_statement(query))
+
+
+def statement_plan(engine: Engine, statement) -> list[str]:  # noqa: ANN001
+    """План выполнения произвольного запроса репозитория."""
     sql = str(statement.compile(engine, compile_kwargs={"literal_binds": True}))
 
     with engine.connect() as connection:
@@ -64,6 +71,32 @@ def test_sorting_is_covered_by_index(migrated_engine, name: str) -> None:  # noq
     )
     assert any("USING INDEX" in line or "USING COVERING INDEX" in line for line in plan), (
         f"{name}: план не использует индекс вовсе:\n" + "\n".join(plan)
+    )
+
+
+INSTANCE_ID = "proc_01M2T1R61M8W1EMS4WBMRDKSTZ"
+
+
+def test_instance_events_are_read_by_index(migrated_engine) -> None:  # noqa: ANN001
+    """События одного экземпляра процесса читаются по индексу, а не сканированием (§77.1).
+
+    Запрос detail — ``WHERE subject_id = ? ORDER BY timestamp, id``, и его
+    покрывает тот же ``ix_events_subject_id_timestamp(subject_id, timestamp, id)``,
+    который появился ради сортировки списка (ADR-0014). Проверяется и отсутствие
+    временного дерева, и **имя** использованного индекса: план с любым другим
+    индексом означал бы, что фильтр по экземпляру работает не так, как задумано.
+    """
+    plan = statement_plan(
+        migrated_engine,
+        build_instance_events_statement(INSTANCE_ID, limit=1001),
+    )
+
+    assert plan, "план пуст — проверка ничего не проверила"
+    assert not any("TEMP B-TREE" in line for line in plan), (
+        "сортировка событий экземпляра не покрыта индексом:\n" + "\n".join(plan)
+    )
+    assert any("ix_events_subject_id_timestamp" in line for line in plan), (
+        "запрос событий экземпляра не использует индекс по subject_id:\n" + "\n".join(plan)
     )
 
 

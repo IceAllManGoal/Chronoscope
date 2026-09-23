@@ -140,6 +140,28 @@ def build_list_statement(query: EventQuery) -> Any:
     )
 
 
+# ── Запрос событий одного экземпляра процесса ────────────────────────
+
+
+def build_instance_events_statement(process_instance_id: str, *, limit: int) -> Any:
+    """Запрос событий одного экземпляра процесса (§14, §77.1).
+
+    Порядок — ``timestamp ASC, id ASC``: detail экземпляра собирается от начала
+    его жизни к концу, и порядок задаётся здесь, а не перекладывается на
+    вызывающего.
+
+    Отдельной функцией — по той же причине, что и ``build_list_statement``:
+    план этого запроса проверяется тестом (`tests/test_index_coverage.py`), и
+    проверять нужно план того самого запроса, которым пользуется репозиторий.
+    """
+    return (
+        select(events)
+        .where(events.c.subject_id == process_instance_id)
+        .order_by(events.c.timestamp.asc(), events.c.id.asc())
+        .limit(limit)
+    )
+
+
 # ── Преобразование строк БД в доменные объекты ───────────────────────
 
 
@@ -347,6 +369,22 @@ class EventRepository(_Repository):
             next_cursor = encode_cursor(last.timestamp, last.id)
 
         return EventPage(events=page_events, next_cursor=next_cursor)
+
+    def find_instance_events(self, process_instance_id: str, *, limit: int) -> tuple[Event, ...]:
+        """События одного экземпляра процесса (§14, §77.1).
+
+        Отдаётся не больше ``limit`` событий: предел принадлежит вызывающему, а
+        решение о том, что делать с достигнутым пределом, принимает use case —
+        хранилище о существовании detail не знает.
+        """
+        statement = build_instance_events_statement(process_instance_id, limit=limit)
+
+        try:
+            rows = self._read(statement).all()
+        except SQLAlchemyError as exc:
+            raise StorageError(f"не удалось прочитать события экземпляра процесса: {exc}") from exc
+
+        return tuple(_row_to_event(row) for row in rows)
 
     def count(self) -> int:
         try:
