@@ -21,7 +21,7 @@ from chronoscope import __version__
 from chronoscope.api.dependencies import CoreContainer, build_container
 from chronoscope.api.errors import register_exception_handlers
 from chronoscope.api.middleware import RequestSizeLimitMiddleware
-from chronoscope.api.routes import events, health, ingest, status
+from chronoscope.api.routes import events, health, ingest, processes, status
 from chronoscope.infrastructure.config.settings import CoreSettings, load_settings
 from chronoscope.infrastructure.database.engine import missing_tables
 from chronoscope.infrastructure.logging.setup import configure_logging, get_logger, log_event
@@ -92,6 +92,7 @@ def create_app(settings: CoreSettings | None = None) -> FastAPI:
     app.include_router(status.router, prefix=API_PREFIX)
     app.include_router(ingest.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
+    app.include_router(processes.router, prefix=API_PREFIX)
 
     mount_web_page(app, resolved_settings)
 

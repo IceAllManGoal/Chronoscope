@@ -33,10 +33,12 @@ Event                     нормализованная сущность
         ↓
 Event Store               SQLite: events
         ↓
-Query API                 GET /api/v1/events
+Query API                 GET /api/v1/events, GET /api/v1/processes/{id}
 ```
 
 Ключевой принцип: **сырое событие сохраняется до нормализации** (§11, [ADR-0005](decisions/0005-preserve-raw-events.md)). Поэтому историю можно переобработать новой версией нормализатора, не собирая данные заново.
+
+Событийный слой остаётся единственным источником: **отдельной таблицы процессов нет**. Экземпляр процесса — это набор событий с общим `subject_id`, а `GET /api/v1/processes/{id}` собирает из них detail на лету (§77.1). Такой detail нельзя забыть обновить при появлении нового события о том же процессе, и расходиться с историей ему негде.
 
 Архитектурная формула проекта:
 
@@ -54,7 +56,7 @@ Query API                 GET /api/v1/events
 ```text
 core/chronoscope/
 ├── api/               HTTP: валидация transport-схемы, вызов use case, сериализация ответа
-├── application/       use cases: IngestRawEvent, ListEvents, GetEvent
+├── application/       use cases: IngestRawEvent, ListEvents, GetEvent, GetProcessDetail
 │   └── ports.py       порты слоя: EventRepositoryPort, RawEventRepositoryPort, EventQuery, EventPage
 ├── cli/               CLI (§57) — клиент своего же API, а не слой приложения
 ├── domain/            события, сущности, идентификаторы, event types
@@ -211,7 +213,10 @@ GET  /api/v1/status
 POST /api/v1/ingest/raw-events
 GET  /api/v1/events
 GET  /api/v1/events/{event_id}
+GET  /api/v1/processes/{process_instance_id}
 ```
+
+`/events` отвечает на вопрос «что происходило», `/processes/{id}` — «что это за экземпляр процесса»: его идентичность, жизнь и связь с родителем. Ленты событий в detail нет, чтобы не появился второй способ получать одни и те же данные со своей пагинацией и своим порядком сортировки.
 
 Ограничения безопасности (§33, §66, [ADR-0007](decisions/0007-local-only-api.md)):
 

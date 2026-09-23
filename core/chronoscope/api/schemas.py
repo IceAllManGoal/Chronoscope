@@ -16,11 +16,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
+from chronoscope.application.queries.process_detail import ProcessDetail
 from chronoscope.domain.events.entity_ref import MAX_NAME_LENGTH, EntityRef
 from chronoscope.domain.events.event import Event
 from chronoscope.domain.ids import (
@@ -160,6 +161,83 @@ class EventListOut(BaseModel):
         description="Курсор следующей страницы. null означает, что события закончились.",
     )
     count: int
+
+
+class ProcessParentOut(BaseModel):
+    """Родитель экземпляра процесса (§20)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: ProcessInstanceId | None
+    name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
+    pid: int | None
+    resolved: bool = Field(
+        description=(
+            "Известна ли идентичность родителя. false означает, что родитель мог быть, "
+            "но его событие старта не наблюдалось: это не то же самое, что отсутствие родителя."
+        )
+    )
+
+
+class ProcessDetailOut(BaseModel):
+    """Ответ GET /api/v1/processes/{process_instance_id} (§77.1).
+
+    Модель терпима к неполной истории: время старта и наблюдавшееся событие
+    запуска — разные поля, потому что событие завершения несёт
+    ``process_started_at`` и время старта может быть известно без наблюдения.
+    Отсутствие ``exited_at`` означает «завершение не наблюдалось» и ничего
+    больше: выводить из него состояние процесса нельзя, и поля состояния здесь
+    нет намеренно.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: ProcessInstanceId
+    name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
+    pid: int | None
+    boot_id: BootId | None
+    started_at: datetime | None = Field(
+        description="Время старта процесса из данных источника. Не означает, что событие запуска наблюдалось."
+    )
+    exited_at: datetime | None = Field(
+        description="Время завершения. null — завершение не наблюдалось."
+    )
+    duration_ms: int | None = Field(
+        description="Длительность жизни в миллисекундах. null, если известно только одно из времён."
+    )
+    parent: ProcessParentOut
+    observed_start: bool = Field(description="Наблюдалось ли событие process.started")
+    observed_exit: bool = Field(description="Наблюдалось ли событие process.exited")
+
+    @field_serializer("started_at", "exited_at", when_used="json")
+    def _serialize_timestamp(self, value: datetime | None) -> str | None:
+        """Отдавать время в форме контракта: суффикс ``Z``, а не смещение."""
+        return format_utc(value) if value is not None else None
+
+    @classmethod
+    def from_domain(cls, detail: ProcessDetail) -> "ProcessDetailOut":
+        return cls(
+            id=detail.id,
+            name=detail.name,
+            pid=detail.pid,
+            boot_id=detail.boot_id,
+            started_at=detail.started_at,
+            exited_at=detail.exited_at,
+            # Длительность отдаётся целым числом миллисекунд, а не секундами с
+            # плавающей точкой: точность источника — миллисекунды, и перевод в
+            # секунды вносил бы округление там, где его не было.
+            duration_ms=(
+                int(detail.duration / timedelta(milliseconds=1)) if detail.duration is not None else None
+            ),
+            parent=ProcessParentOut(
+                id=detail.parent.id,
+                name=detail.parent.name,
+                pid=detail.parent.pid,
+                resolved=detail.parent.resolved,
+            ),
+            observed_start=detail.observed_start,
+            observed_exit=detail.observed_exit,
+        )
 
 
 class RejectedEventOut(BaseModel):

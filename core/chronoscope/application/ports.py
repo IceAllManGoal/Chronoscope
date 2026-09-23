@@ -92,6 +92,21 @@ class EventRepositoryPort(Protocol):
 
     def list(self, query: EventQuery) -> EventPage: ...
 
+    def find_instance_events(self, process_instance_id: str, *, limit: int) -> tuple[Event, ...]:
+        """События одного экземпляра процесса, от ранних к поздним (§14).
+
+        Экземпляр процесса — не строка в таблице процессов, а набор событий с
+        общим ``subject_id``: процессов в хранилище нет, есть события о них.
+        Поэтому запрос выглядит именно так, и отдельной таблицы ``processes``
+        для detail не заводится.
+
+        ``limit`` обязателен и принадлежит вызывающему: у чтения detail должен
+        быть предел, а какой он — решает приложение, а не хранилище. Порядок
+        выборки фиксирован, потому что detail собирается от начала жизни
+        процесса к её концу.
+        """
+        ...
+
     def count(self) -> int: ...
 
     def count_since(self, moment: datetime) -> int: ...

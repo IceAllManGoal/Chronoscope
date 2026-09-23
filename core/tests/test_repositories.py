@@ -416,3 +416,101 @@ class TestProcessInstanceLookup:
         )
         assert found is not None
         assert found.id == newer
+
+
+class TestInstanceEvents:
+    """События одного экземпляра процесса (§14, §77.1).
+
+    Экземпляр процесса — не строка в таблице процессов, а набор событий с общим
+    ``subject_id``. Поэтому проверяется не «SELECT работает», а то, что выборка
+    не смешивает два экземпляра с одинаковым PID и отдаёт события в том порядке,
+    из которого собирается detail.
+    """
+
+    OLDER_INSTANCE = "proc_01K5R8Z9M0A1B2C3D4E5F6G7H8"
+    NEWER_INSTANCE = "proc_01K5R8Z9M1C2D3E4F5G6H7J8K9"
+
+    def _store(
+        self,
+        repository,  # noqa: ANN001
+        *,
+        instance_id: str,
+        event_type: str,
+        timestamp: datetime,
+        pid: int,
+    ) -> Event:
+        event = make_event(
+            id=new_event_id(),
+            type=event_type,
+            timestamp=timestamp,
+            observed_at=timestamp,
+            raw_event_id=None,
+            subject=EntityRef("process", instance_id, "notepad.exe"),
+            attributes={"pid": pid, "process_started_at": "2026-09-18T10:00:00.000Z"},
+        )
+        assert repository.insert(event, ingested_at=INGESTED_AT) is True
+        return event
+
+    def test_returns_events_from_early_to_late(self, event_repository) -> None:
+        """Порядок задаёт хранилище: detail собирается от начала жизни к концу."""
+        base = datetime(2026, 9, 18, 10, 0, 0, tzinfo=UTC)
+        # Записано в обратном порядке — на порядок выдачи это влиять не должно.
+        self._store(
+            event_repository,
+            instance_id=PROC_ID,
+            event_type=PROCESS_EXITED,
+            timestamp=base + timedelta(minutes=1),
+            pid=NOTEPAD_PID,
+        )
+        self._store(
+            event_repository,
+            instance_id=PROC_ID,
+            event_type=PROCESS_STARTED,
+            timestamp=base,
+            pid=NOTEPAD_PID,
+        )
+
+        events = event_repository.find_instance_events(PROC_ID, limit=10)
+
+        assert [event.type for event in events] == [PROCESS_STARTED, PROCESS_EXITED]
+
+    def test_does_not_mix_instances_with_reused_pid(self, event_repository) -> None:
+        """Переиспользованный PID не склеивает две жизни: экземпляры различаются (§14)."""
+        base = datetime(2026, 9, 18, 10, 0, 0, tzinfo=UTC)
+        self._store(
+            event_repository,
+            instance_id=self.OLDER_INSTANCE,
+            event_type=PROCESS_STARTED,
+            timestamp=base,
+            pid=NOTEPAD_PID,
+        )
+        self._store(
+            event_repository,
+            instance_id=self.NEWER_INSTANCE,
+            event_type=PROCESS_STARTED,
+            timestamp=base + timedelta(minutes=10),
+            pid=NOTEPAD_PID,
+        )
+
+        older = event_repository.find_instance_events(self.OLDER_INSTANCE, limit=10)
+        newer = event_repository.find_instance_events(self.NEWER_INSTANCE, limit=10)
+
+        assert [event.subject.id for event in older] == [self.OLDER_INSTANCE]
+        assert [event.subject.id for event in newer] == [self.NEWER_INSTANCE]
+
+    def test_respects_limit(self, event_repository) -> None:
+        """Предел чтения исполняет хранилище: use case на него полагается."""
+        base = datetime(2026, 9, 18, 10, 0, 0, tzinfo=UTC)
+        for index in range(3):
+            self._store(
+                event_repository,
+                instance_id=PROC_ID,
+                event_type=PROCESS_STARTED,
+                timestamp=base + timedelta(seconds=index),
+                pid=NOTEPAD_PID,
+            )
+
+        assert len(event_repository.find_instance_events(PROC_ID, limit=2)) == 2
+
+    def test_unknown_instance_returns_nothing(self, event_repository) -> None:
+        assert event_repository.find_instance_events(self.OLDER_INSTANCE, limit=10) == ()

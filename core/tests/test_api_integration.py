@@ -212,6 +212,105 @@ class TestParentResolution:
         assert events[0]["attributes"]["parent_pid"] == 4312
 
 
+class TestProcessDetailEndpoint:
+    """GET /api/v1/processes/{id} — экземпляр процесса как сущность (§77.1).
+
+    Проверяется на настоящем приёме событий: detail собирается из тех же событий,
+    которые положил ingest, и никакой отдельной записи о процессе не существует.
+    """
+
+    def test_lifecycle_is_restored_from_two_events(self, client: TestClient) -> None:
+        post_events(client, [load_fixture("windows", "process_start_001.json")])
+        post_events(client, [load_fixture("windows", "process_exit_001.json")])
+
+        response = client.get(f"{API}/processes/{NOTEPAD_INSTANCE_ID}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["id"] == NOTEPAD_INSTANCE_ID
+        assert body["name"] == "notepad.exe"
+        assert body["pid"] == 9812
+        assert body["boot_id"] == "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA"
+        assert body["observed_start"] is True
+        assert body["observed_exit"] is True
+        assert body["started_at"] == "2026-09-18T10:42:15.220Z"
+        assert body["exited_at"] == "2026-09-18T10:44:03.114Z"
+        assert body["duration_ms"] == 107_894
+
+    def test_start_without_exit_reports_no_completion(self, client: TestClient) -> None:
+        """Незавершённость видна как отсутствие данных, а не как «работает»."""
+        post_events(client, [load_fixture("windows", "process_start_001.json")])
+
+        body = client.get(f"{API}/processes/{NOTEPAD_INSTANCE_ID}").json()
+
+        assert body["observed_start"] is True
+        assert body["observed_exit"] is False
+        assert body["exited_at"] is None
+        assert body["duration_ms"] is None
+
+    def test_exit_without_observed_start_keeps_start_time(self, client: TestClient) -> None:
+        """Завершение несёт ``process_started_at``: время старта известно и без наблюдения.
+
+        Это тот случай, ради которого в ответе есть отдельные ``started_at`` и
+        ``observed_start``: если бы признак выводился из наличия времени, ответ
+        утверждал бы, что событие запуска наблюдалось, чего не было.
+        """
+        post_events(client, [load_fixture("windows", "process_exit_001.json")])
+
+        body = client.get(f"{API}/processes/{NOTEPAD_INSTANCE_ID}").json()
+
+        assert body["observed_start"] is False
+        assert body["started_at"] == "2026-09-18T10:42:15.220Z"
+        assert body["observed_exit"] is True
+        assert body["exited_at"] == "2026-09-18T10:44:03.114Z"
+        assert body["duration_ms"] == 107_894
+
+    def test_parent_identity_comes_from_observed_parent(self, client: TestClient) -> None:
+        post_events(client, [EXPLORER_RAW])
+        post_events(client, [load_fixture("windows", "process_start_001.json")])
+
+        body = client.get(f"{API}/processes/{NOTEPAD_INSTANCE_ID}").json()
+
+        assert body["parent"]["resolved"] is True
+        assert body["parent"]["id"] == EXPLORER_INSTANCE_ID
+        assert body["parent"]["name"] == "explorer.exe"
+        assert body["parent"]["pid"] == 4312
+
+    def test_parent_stays_unresolved_without_its_start_event(self, client: TestClient) -> None:
+        """PID известен, идентичность — нет: связь не выдумывается (§20)."""
+        post_events(client, [load_fixture("windows", "process_start_001.json")])
+
+        body = client.get(f"{API}/processes/{NOTEPAD_INSTANCE_ID}").json()
+
+        assert body["parent"]["pid"] == 4312
+        assert body["parent"]["resolved"] is False
+        assert body["parent"]["id"] is None
+        assert body["parent"]["name"] is None
+
+    def test_unknown_instance_is_not_found(self, client: TestClient) -> None:
+        response = client.get(f"{API}/processes/{NOTEPAD_INSTANCE_ID}")
+
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+
+    def test_malformed_id_is_invalid_input(self, client: TestClient) -> None:
+        """Опечатка в префиксе — неверный запрос, а не «экземпляр не найден»."""
+        response = client.get(f"{API}/processes/not-an-id")
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_input"
+
+    def test_detail_does_not_return_event_feed(self, client: TestClient) -> None:
+        """Лента событий остаётся делом /events (§31): второго способа её получить нет."""
+        post_events(client, [load_fixture("windows", "process_start_001.json")])
+
+        body = client.get(f"{API}/processes/{NOTEPAD_INSTANCE_ID}").json()
+
+        assert "events" not in body
+        events = client.get(f"{API}/events", params={"subject_id": NOTEPAD_INSTANCE_ID}).json()
+        assert [event["type"] for event in events["events"]] == ["process.started"]
+
+
 class TestIngestRobustness:
     def test_one_bad_event_does_not_stop_the_batch(self, client: TestClient) -> None:
         """§60: одно плохое событие не останавливает pipeline."""
