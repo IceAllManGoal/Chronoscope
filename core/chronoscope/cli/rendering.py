@@ -75,6 +75,47 @@ def format_timestamp(value: Any) -> str:
     return moment.astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def format_duration(duration_ms: Any) -> str:
+    """Длительность жизни процесса из миллисекунд.
+
+    Пустое значение остаётся пустым: `null` в ответе означает «известно только
+    одно из времён», и показывать на его месте «0 с» значило бы утверждать, что
+    процесс жил мгновение.
+    """
+    if not isinstance(duration_ms, int) or isinstance(duration_ms, bool) or duration_ms < 0:
+        return NO_VALUE
+
+    if duration_ms < 1000:
+        return f"{duration_ms} мс"
+
+    seconds = duration_ms / 1000
+    if seconds < 60:
+        return f"{seconds:.1f} с"
+
+    # Дробная часть отбрасывается, а не округляется вверх: длительность не
+    # должна выглядеть больше измеренной.
+    minutes, seconds = divmod(int(seconds), 60)
+    if minutes < 60:
+        return f"{minutes} мин {seconds} с"
+
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} ч {minutes} мин"
+
+
+def format_observed(flag: Any) -> str:
+    """Ответ на вопрос «наблюдалось ли событие» в терминах CLI.
+
+    Не «true/false»: рядом стоят времена, полученные из данных источника, и
+    разница между «время известно» и «событие наблюдалось» — именно то, ради
+    чего она показывается отдельной строкой.
+    """
+    if flag is True:
+        return "да"
+    if flag is False:
+        return "нет"
+    return NO_VALUE
+
+
 def render_kv(rows: Sequence[tuple[str, Any]], *, indent: int = 0, width: int = 0) -> str:
     """Две колонки с выравниванием — форма примера из §57."""
     if not rows:

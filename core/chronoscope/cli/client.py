@@ -70,6 +70,10 @@ class CoreClient:
     def event(self, event_id: str) -> Mapping[str, Any]:
         return self._get(f"/events/{urllib.parse.quote(event_id, safe='')}")
 
+    def process(self, process_instance_id: str) -> Mapping[str, Any]:
+        """Экземпляр процесса как сущность (§77.1)."""
+        return self._get(f"/processes/{urllib.parse.quote(process_instance_id, safe='')}")
+
     def _get(self, path: str, params: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
         url = f"{self.base_url}{API_PREFIX}{path}"
         if params:
