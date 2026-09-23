@@ -1,6 +1,6 @@
 [project]
 name = "chronoscope"
-version = "0.0.2"
+version = "0.0.3"
 description = "Chronoscope Core — local-first recorder of structured system events"
 readme = "README.md"
 requires-python = ">=3.13"
