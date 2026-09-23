@@ -24,6 +24,7 @@ from chronoscope.cli.main import main
 from chronoscope.infrastructure.config.settings import CoreSettings
 from chronoscope.main import create_app
 from tests.conftest import load_fixture
+from tests.factories import PROC_ID
 
 API = "/api/v1"
 
@@ -104,6 +105,25 @@ class TestRendering:
         assert lines[0].startswith("Короткое")
         assert lines[1].startswith("Значительно длиннее")
         assert lines[0].index("1") == lines[1].index("2")
+
+    def test_duration_is_human_readable(self) -> None:
+        """1 мин 47.894 с показывается как «1 мин 47 с»: дробь отбрасывается, не округляется вверх."""
+        assert rendering.format_duration(250) == "250 мс"
+        assert rendering.format_duration(5490) == "5.5 с"
+        assert rendering.format_duration(107894) == "1 мин 47 с"
+        assert rendering.format_duration(7_200_000) == "2 ч 0 мин"
+
+    def test_duration_survives_missing_value(self) -> None:
+        """`null` означает «известно только одно из времён» — и остаётся пустым."""
+        assert rendering.format_duration(None) == rendering.NO_VALUE
+        assert rendering.format_duration(True) == rendering.NO_VALUE
+        assert rendering.format_duration(-1) == rendering.NO_VALUE
+
+    def test_observed_flag_is_not_shown_as_boolean(self) -> None:
+        """Разница «время известно» и «событие наблюдалось» — то, ради чего строка есть."""
+        assert rendering.format_observed(True) == "да"
+        assert rendering.format_observed(False) == "нет"
+        assert rendering.format_observed(None) == rendering.NO_VALUE
 
 
 # ── Интеграция с настоящим Core ──────────────────────────────────────
@@ -221,6 +241,56 @@ class TestCliAgainstRealCore:
         assert "pid" in out
         assert "Сырое событие" in out
 
+    def test_process_shows_lifecycle(self, populated_core: str, capsys: pytest.CaptureFixture[str]) -> None:
+        """Экземпляр процесса целиком: времена, признаки наблюдения, длительность."""
+        assert main(["--core-url", populated_core, "process", PROC_ID]) == 0
+
+        out = capsys.readouterr().out
+        assert PROC_ID in out
+        assert "notepad.exe" in out
+        assert "Запуск" in out
+        assert "Наблюдался запуск  да" in out
+        assert "Наблюдался выход   да" in out
+        assert "1 мин 47 с" in out
+        assert "PID родителя" in out
+
+    def test_process_points_to_its_events(self, populated_core: str, capsys: pytest.CaptureFixture[str]) -> None:
+        """Ленты в detail нет — команда показывает, чем её получить (§31)."""
+        main(["--core-url", populated_core, "process", PROC_ID])
+
+        out = capsys.readouterr().out
+        assert f"chronoscope events --subject-id {PROC_ID}" in out
+
+    def test_process_reports_unresolved_parent(self, populated_core: str, capsys: pytest.CaptureFixture[str]) -> None:
+        """PID родителя известен, идентичность — нет: это разные факты (§20)."""
+        main(["--core-url", populated_core, "process", PROC_ID])
+
+        out = capsys.readouterr().out
+        assert "4312" in out
+        assert "Связь с родителем не установлена" in out
+
+    def test_process_without_observed_exit_does_not_claim_running(
+        self, running_core: str, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Отсутствие выхода — не «процесс работает»: Chronoscope его не наблюдал.
+
+        Это ровно то место, где продукт легко начинает выдумывать состояние, и
+        проверяется оно на живом Core, а не в разметке ответа.
+        """
+        response = httpx.post(
+            f"{running_core}{API}/ingest/raw-events",
+            json={"schema_version": 1, "events": [load_fixture("windows", "process_start_001.json")]},
+            timeout=10,
+        )
+        assert response.status_code == 200
+
+        assert main(["--core-url", running_core, "process", PROC_ID]) == 0
+
+        out = capsys.readouterr().out
+        assert "Наблюдался выход   нет" in out
+        assert "не значит, что процесс работает" in out
+        assert "работает" not in out.replace("не значит, что процесс работает", "")
+
     def test_doctor_reports_ok(self, populated_core: str, capsys: pytest.CaptureFixture[str]) -> None:
         assert main(["--core-url", populated_core, "doctor"]) == 0
 
@@ -273,6 +343,23 @@ class TestCliFailures:
 
     def test_invalid_limit_is_reported_with_code(self, running_core: str, capsys: pytest.CaptureFixture[str]) -> None:
         assert main(["--core-url", running_core, "events", "--limit", "0"]) == 1
+
+        captured = capsys.readouterr()
+        assert "invalid_input" in captured.err
+
+    def test_unknown_process_is_reported_with_code(self, running_core: str, capsys: pytest.CaptureFixture[str]) -> None:
+        """Идентификатор правильной формы, но такого экземпляра нет — это not_found."""
+        assert main(["--core-url", running_core, "process", "proc_01K5R8Z9M0A1B2C3D4E5F6G7H8"]) == 1
+
+        captured = capsys.readouterr()
+        assert "not_found" in captured.err
+        assert "не найден" in captured.err
+
+    def test_malformed_process_id_is_reported_with_code(
+        self, running_core: str, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Опечатка в префиксе — неверный запрос, а не отсутствие данных."""
+        assert main(["--core-url", running_core, "process", "pid-9812"]) == 1
 
         captured = capsys.readouterr()
         assert "invalid_input" in captured.err

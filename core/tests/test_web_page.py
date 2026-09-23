@@ -106,6 +106,48 @@ class TestWebAssetsOnDisk:
             assert forbidden not in script, f"страница собирает разметку через {forbidden}"
 
 
+class TestProcessNavigation:
+    """Переход «событие → экземпляр процесса» (§77.1).
+
+    Поведение панели проверить нечем: браузерной автоматизации в проекте нет, и
+    это ограничение записано в ADR-0012, а не замаскировано тестом, который её не
+    заменяет. Здесь проверяется то, что ломается молча: есть ли фильтр по
+    субъекту, обращается ли страница к эндпоинту процесса и не собирает ли она
+    разметку из данных.
+    """
+
+    def test_subject_filter_exists(self, client: TestClient) -> None:
+        """Без поля для `subject_id` ссылка «показать события процесса» некуда бы вела."""
+        html = client.get(f"{WEB_MOUNT_PATH}/").text
+
+        assert 'id="filter-subject"' in html
+
+    def test_page_uses_process_endpoint(self, client: TestClient) -> None:
+        script = client.get(f"{WEB_MOUNT_PATH}/app.js").text
+
+        assert "/processes/" in script
+        assert "subject_id" in script
+
+    def test_process_panel_does_not_promise_state(self, client: TestClient) -> None:
+        """Панель процесса — последнее место, где продукт мог бы выдумать состояние.
+
+        Формулировка проверяется как факт содержимого, а не как красота текста:
+        если она исчезнет, интерфейс снова начнёт выглядеть так, будто пустое
+        завершение означает «процесс работает».
+        """
+        script = client.get(f"{WEB_MOUNT_PATH}/app.js").text
+
+        assert "не значит, что процесс работает" in script
+
+    def test_assets_are_served_with_the_page_that_uses_them(self, client: TestClient) -> None:
+        """Стили перехода и заметок едут вместе со страницей, а не отдельным файлом."""
+        styles = client.get(f"{WEB_MOUNT_PATH}/style.css").text
+
+        assert "button.link" in styles
+        assert ".note" in styles
+        assert ".detail-actions" in styles
+
+
 class TestMissingStaticDegradesGracefully:
     def test_core_stays_a_working_api_without_static(
         self, migrated_database: CoreSettings, monkeypatch: pytest.MonkeyPatch

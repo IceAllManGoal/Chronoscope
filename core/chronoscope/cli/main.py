@@ -81,6 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
     detail = subparsers.add_parser("event", help="одно событие по идентификатору")
     detail.add_argument("event_id", metavar="<id>", help="идентификатор вида evt_<ULID>")
 
+    process = subparsers.add_parser("process", help="экземпляр процесса по идентификатору")
+    process.add_argument(
+        "process_instance_id",
+        metavar="<id>",
+        help="идентификатор вида proc_<ULID> — он же subject.id в событиях процесса",
+    )
+
     subparsers.add_parser("doctor", help="диагностика: доступность Core, схема, данные")
 
     return parser
@@ -105,6 +112,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return command_events(client, args)
         if args.command == "event":
             return command_event(client, args.event_id)
+        if args.command == "process":
+            return command_process(client, args.process_instance_id)
         if args.command == "doctor":
             return command_doctor(client)
     except CoreUnavailable as error:
@@ -215,6 +224,68 @@ def command_event(client: CoreClient, event_id: str) -> int:
         # приводить их к общему виду значило бы терять то, что в них записано.
         for key in sorted(attributes):
             print(f"  {key.ljust(max(len(name) for name in attributes))}  {attributes[key]}")
+
+    return 0
+
+
+def command_process(client: CoreClient, process_instance_id: str) -> int:
+    """Экземпляр процесса как сущность (§77.1).
+
+    Команда только показывает то, что отдал API: никаких вычислений здесь нет.
+    Иначе у одной и той же сущности появилось бы второе представление, и
+    вопросы вида «почему в CLI не так, как в API» стали бы законными.
+    """
+    detail = client.process(process_instance_id)
+
+    parent = detail.get("parent") or {}
+    parent_label = rendering._entity_label(
+        {"id": parent.get("id"), "name": parent.get("name")} if parent.get("id") else None
+    )
+
+    print(
+        rendering.render_kv(
+            [
+                ("Идентификатор", str(detail.get("id", rendering.NO_VALUE))),
+                ("Имя", str(detail.get("name") or rendering.NO_VALUE)),
+                ("PID", str(detail.get("pid", rendering.NO_VALUE))),
+                ("Загрузка ОС", str(detail.get("boot_id") or rendering.NO_VALUE)),
+                # Время и признак наблюдения — разные строки: событие завершения
+                # несёт время старта, поэтому «когда» может быть известно без
+                # «наблюдался» (docs/EVENT_MODEL.md §2.4.1).
+                ("Запуск", rendering.format_timestamp(detail.get("started_at"))),
+                ("Наблюдался запуск", rendering.format_observed(detail.get("observed_start"))),
+                ("Завершение", rendering.format_timestamp(detail.get("exited_at"))),
+                ("Наблюдался выход", rendering.format_observed(detail.get("observed_exit"))),
+                ("Длительность", rendering.format_duration(detail.get("duration_ms"))),
+                ("Родитель", parent_label),
+                ("PID родителя", str(parent.get("pid", rendering.NO_VALUE))),
+            ]
+        )
+    )
+
+    notes: list[str] = []
+
+    if parent.get("pid") is not None and not parent.get("resolved"):
+        # Разные факты: PID приходит от источника, идентичность родителя — из
+        # наблюдавшегося события его старта (§20).
+        notes.append(
+            "Связь с родителем не установлена: событие старта родительского процесса не наблюдалось."
+        )
+
+    if detail.get("observed_exit") is False:
+        notes.append(
+            "Завершение не наблюдалось. Это не значит, что процесс работает: "
+            "Chronoscope не видел события выхода, а коллектор может его пропустить (§8.4)."
+        )
+
+    if notes:
+        print()
+        for note in notes:
+            print(note)
+
+    print()
+    print("События этого экземпляра:")
+    print(f"  {PROGRAM} events --subject-id {detail.get('id', process_instance_id)}")
 
     return 0
 
