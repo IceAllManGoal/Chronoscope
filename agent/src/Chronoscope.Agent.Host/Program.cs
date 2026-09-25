@@ -11,7 +11,10 @@ using Chronoscope.Agent.Transport;
 //
 // Два процесса в двух терминалах:
 //   Terminal 1:  cd core && uv run python -m chronoscope
-//   Terminal 2:  dotnet run --project agent/src/Chronoscope.Agent
+//   Terminal 2:  dotnet run --project agent/src/Chronoscope.Agent.Host
+//
+// Точка входа — Host: композиционный корень обязан знать и ядро, и платформенные
+// коллекторы ([ADR-0011](../../docs/decisions/0011-agent-project-structure.md)).
 
 AgentSettings settings;
 try
@@ -56,32 +59,38 @@ JsonLog.Info(
     ("capture_user", settings.Process.CaptureUser));
 
 var senderTask = sender.RunAsync(shutdown.Token);
-var exitCode = 0;
+
+// Список коллекторов собирается здесь и только здесь: композиционный корень —
+// единственное место, знающее и о конфигурации, и о платформенных реализациях.
+// Коллекторы друг о друге не знают; за то, чтобы они жили одновременно и не
+// роняли друг друга, отвечает CollectorSupervisor (§8.3, §8.5).
+var collectors = new List<IEventCollector>();
+
+if (settings.Process.Enabled)
+{
+    var source = new WindowsProcessObservationSource(settings.Process);
+    collectors.Add(ProcessCollector.Create(source, settings, identity, AgentInfo.Version));
+}
+else
+{
+    JsonLog.Warning(
+        "collector_disabled",
+        "коллектор процессов выключен: события процессов не собираются",
+        ("collector", ProcessCollector.CollectorName));
+}
+
+// Здесь же появится windows.eventlog (§77.2), и ему не понадобится ни свой
+// буфер, ни свой транспорт: приёмник у коллекторов общий.
+
+var supervisor = new CollectorSupervisor(collectors, buffer);
 
 try
 {
-    if (!settings.Process.Enabled)
-    {
-        JsonLog.Warning("collector_disabled", "коллектор процессов выключен: события не собираются");
-        await Task.Delay(Timeout.Infinite, shutdown.Token);
-    }
-    else
-    {
-        var source = new WindowsProcessObservationSource(settings.Process);
-        var collector = ProcessCollector.Create(source, settings, identity, AgentInfo.Version);
-
-        JsonLog.Info("collector_started", "наблюдение за процессами начато", ("collector", collector.Name));
-        await collector.StartAsync(buffer, shutdown.Token);
-    }
+    await supervisor.RunAsync(shutdown.Token);
 }
 catch (OperationCanceledException)
 {
-    // Штатная остановка по Ctrl+C.
-}
-catch (CollectorException exception)
-{
-    JsonLog.Error("collector_failed", exception.Message);
-    exitCode = 1;
+    // Штатная остановка по Ctrl+C: коллекторы уже остановлены отменой.
 }
 
 // Закрываем запись, чтобы отправитель дочитал буфер, отправил остаток и завершился.
@@ -99,6 +108,23 @@ JsonLog.Info(
     ("events_dropped", statistics.EventsDropped),
     ("batches_sent", statistics.BatchesSent),
     ("batches_rejected", statistics.BatchesRejected),
-    ("send_failures", statistics.SendFailures));
+    ("send_failures", statistics.SendFailures),
+    ("collectors", collectors.Count),
+    ("collectors_lost", supervisor.LostCount));
 
-return exitCode;
+var lost = supervisor.Statuses.Where(status => status.IsLost).ToArray();
+if (lost.Length > 0)
+{
+    // Итог одной строкой: причины уже были сказаны в момент отказа, но в длинном
+    // логе их к моменту остановки не видно, а знать, чем кончился прогон, нужно.
+    JsonLog.Error(
+        "collectors_lost_summary",
+        "часть источников осталась без наблюдения",
+        ("lost", string.Join(", ", lost.Select(status => $"{status.Name} ({status.Outcome}: {status.Detail})"))),
+        ("total", collectors.Count));
+}
+
+// Ненулевой код возврата, если хотя бы один источник остался без наблюдения: то
+// же сообщение, что было у отказа коллектора раньше, — но теперь Agent доживает
+// до штатного завершения, а не падает на первом отказе.
+return supervisor.LostCount > 0 ? 1 : 0;
