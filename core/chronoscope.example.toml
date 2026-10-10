@@ -35,5 +35,18 @@ busy_timeout_ms = 5000
 # capture_command_line = true
 # capture_user = true
 #
+# Второй источник — журнал Windows (0.0.4). Выключен по умолчанию: пока здесь
+# не написано enabled = true, Agent не подписывается на журнал и не читает из
+# него ни одной записи (§6.2, §77.2 пункт 5). Каналы: System, Application.
+# Канал Security не поддерживается: его чтение требует прав администратора,
+# а продукт от администратора не запускается (§67).
+#
+# [collectors.event_log]
+# enabled = false
+# channels = ["System", "Application"]
+# capture_message = false
+# # read_existing = true отвергается при загрузке: накопленный журнал не
+# # импортируется никогда, наблюдение начинается с момента запуска.
+#
 # [privacy]
 # redact_command_line_patterns = []
