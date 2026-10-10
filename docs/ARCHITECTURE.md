@@ -106,6 +106,25 @@ API → Use Case → Repository
 
 Если родитель не найден (типичный случай: `explorer.exe` стартовал до начала наблюдения), `actor` остаётся пустым, а в атрибутах появляется `parent_resolved: false`. Подставлять догадку вместо факта модель не позволяет.
 
+С 0.0.5 поиск проверяет также host, жизненный цикл и конкурирующие наблюдения.
+Недостаток или конфликт свидетельств оставляет actor пустым. Уже сохранённые
+actor references не переписываются.
+
+### Connect: представления отношений
+
+`domain/process_relationships.py` описывает наблюдения и `parent_of`, проверяет
+согласованность и разрешает родителя. `GetProcessRelations/GetProcessTree`
+используют `EventRepositoryPort`; API только проверяет параметры и сериализует
+типизированный ответ. Репозиторий читает Events в одном SQLite snapshot на
+запрос, пакетами по уровням. Кэш на запрос, visited set и лимиты ограничивают
+обход. Таблиц процессов и связей нет.
+
+Миграция 0003 добавляет expression indexes `(host_id, boot_id, JSON pid,
+subject_id)` и аналогичный parent_pid. Фильтр `entity_id` переиспользует
+пагинацию событий через SQL UNION actor/subject потоков; Event Log по времени
+к процессу не привязывается. Контракт и пределы — [Connect API](CONNECT_API.md),
+решение и измерения — [ADR-0017](decisions/0017-evidence-based-process-relationships.md).
+
 ## 5. Структура репозитория
 
 ```text

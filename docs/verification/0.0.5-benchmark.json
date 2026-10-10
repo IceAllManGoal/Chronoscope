@@ -1,0 +1,417 @@
+{
+  "cold_definition": "new connection/SQLite page cache; OS cache not flushed",
+  "runs": [
+    {
+      "events": 1000,
+      "indexed": false,
+      "insert_ms": 10.975,
+      "measurements": {
+        "relations": {
+          "first_ms": 7.166,
+          "warm_median_ms": 3.065,
+          "warm_max_ms": 3.217,
+          "selects": 5
+        },
+        "tree_chain": {
+          "first_ms": 7.862,
+          "warm_median_ms": 7.056,
+          "warm_max_ms": 7.316,
+          "selects": 11
+        },
+        "tree_wide": {
+          "first_ms": 13.935,
+          "warm_median_ms": 14.844,
+          "warm_max_ms": 24.276,
+          "selects": 4
+        },
+        "related_events": {
+          "first_ms": 3.015,
+          "warm_median_ms": 2.193,
+          "warm_max_ms": 3.107,
+          "selects": 1
+        },
+        "related_next_page": {
+          "first_ms": 4.431,
+          "warm_median_ms": 2.508,
+          "warm_max_ms": 2.847,
+          "selects": 1
+        },
+        "related_time_range": {
+          "first_ms": 3.906,
+          "warm_median_ms": 1.988,
+          "warm_max_ms": 2.954,
+          "selects": 1
+        },
+        "actor_events": {
+          "first_ms": 1.518,
+          "warm_median_ms": 0.69,
+          "warm_max_ms": 0.765,
+          "selects": 1
+        }
+      },
+      "plans": {
+        "pid": [
+          "SEARCH events USING INDEX ix_events_type_timestamp (type=?)",
+          "USE TEMP B-TREE FOR DISTINCT"
+        ],
+        "parent_pid": [
+          "SEARCH events USING INDEX ix_events_type_timestamp (type=?)",
+          "USE TEMP B-TREE FOR DISTINCT"
+        ],
+        "related_events": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_next_page": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_time_range": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "actor_events": [
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)"
+        ]
+      }
+    },
+    {
+      "events": 1000,
+      "indexed": true,
+      "insert_ms": 10.439,
+      "measurements": {
+        "relations": {
+          "first_ms": 4.709,
+          "warm_median_ms": 1.767,
+          "warm_max_ms": 1.904,
+          "selects": 5
+        },
+        "tree_chain": {
+          "first_ms": 4.977,
+          "warm_median_ms": 3.695,
+          "warm_max_ms": 4.166,
+          "selects": 11
+        },
+        "tree_wide": {
+          "first_ms": 13.104,
+          "warm_median_ms": 11.481,
+          "warm_max_ms": 11.581,
+          "selects": 4
+        },
+        "related_events": {
+          "first_ms": 2.412,
+          "warm_median_ms": 1.694,
+          "warm_max_ms": 2.12,
+          "selects": 1
+        },
+        "related_next_page": {
+          "first_ms": 3.7,
+          "warm_median_ms": 1.767,
+          "warm_max_ms": 3.349,
+          "selects": 1
+        },
+        "related_time_range": {
+          "first_ms": 3.473,
+          "warm_median_ms": 1.706,
+          "warm_max_ms": 2.009,
+          "selects": 1
+        },
+        "actor_events": {
+          "first_ms": 1.536,
+          "warm_median_ms": 0.694,
+          "warm_max_ms": 0.704,
+          "selects": 1
+        }
+      },
+      "plans": {
+        "pid": [
+          "SEARCH events USING INDEX ix_events_process_pid (host_id=? AND boot_id=? AND <expr>=? AND subject_id>?)"
+        ],
+        "parent_pid": [
+          "SEARCH events USING INDEX ix_events_process_parent_pid (host_id=? AND boot_id=? AND <expr>=? AND subject_id>?)"
+        ],
+        "related_events": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_next_page": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_time_range": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "actor_events": [
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)"
+        ]
+      }
+    },
+    {
+      "events": 20000,
+      "indexed": false,
+      "insert_ms": 271.803,
+      "measurements": {
+        "relations": {
+          "first_ms": 45.854,
+          "warm_median_ms": 42.269,
+          "warm_max_ms": 43.37,
+          "selects": 5
+        },
+        "tree_chain": {
+          "first_ms": 100.358,
+          "warm_median_ms": 97.438,
+          "warm_max_ms": 102.172,
+          "selects": 11
+        },
+        "tree_wide": {
+          "first_ms": 47.523,
+          "warm_median_ms": 51.554,
+          "warm_max_ms": 52.805,
+          "selects": 4
+        },
+        "related_events": {
+          "first_ms": 2.743,
+          "warm_median_ms": 1.807,
+          "warm_max_ms": 2.256,
+          "selects": 1
+        },
+        "related_next_page": {
+          "first_ms": 3.836,
+          "warm_median_ms": 1.86,
+          "warm_max_ms": 2.25,
+          "selects": 1
+        },
+        "related_time_range": {
+          "first_ms": 3.704,
+          "warm_median_ms": 1.825,
+          "warm_max_ms": 2.08,
+          "selects": 1
+        },
+        "actor_events": {
+          "first_ms": 1.63,
+          "warm_median_ms": 0.695,
+          "warm_max_ms": 0.747,
+          "selects": 1
+        }
+      },
+      "plans": {
+        "pid": [
+          "SEARCH events USING INDEX ix_events_type_timestamp (type=?)",
+          "USE TEMP B-TREE FOR DISTINCT"
+        ],
+        "parent_pid": [
+          "SEARCH events USING INDEX ix_events_type_timestamp (type=?)",
+          "USE TEMP B-TREE FOR DISTINCT"
+        ],
+        "related_events": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_next_page": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_time_range": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "actor_events": [
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)"
+        ]
+      }
+    },
+    {
+      "events": 20000,
+      "indexed": true,
+      "insert_ms": 366.496,
+      "measurements": {
+        "relations": {
+          "first_ms": 5.093,
+          "warm_median_ms": 1.72,
+          "warm_max_ms": 1.828,
+          "selects": 5
+        },
+        "tree_chain": {
+          "first_ms": 4.533,
+          "warm_median_ms": 3.719,
+          "warm_max_ms": 4.257,
+          "selects": 11
+        },
+        "tree_wide": {
+          "first_ms": 20.295,
+          "warm_median_ms": 18.812,
+          "warm_max_ms": 19.144,
+          "selects": 4
+        },
+        "related_events": {
+          "first_ms": 2.508,
+          "warm_median_ms": 1.684,
+          "warm_max_ms": 2.348,
+          "selects": 1
+        },
+        "related_next_page": {
+          "first_ms": 3.807,
+          "warm_median_ms": 1.764,
+          "warm_max_ms": 2.166,
+          "selects": 1
+        },
+        "related_time_range": {
+          "first_ms": 3.984,
+          "warm_median_ms": 1.78,
+          "warm_max_ms": 2.23,
+          "selects": 1
+        },
+        "actor_events": {
+          "first_ms": 1.648,
+          "warm_median_ms": 0.7,
+          "warm_max_ms": 0.747,
+          "selects": 1
+        }
+      },
+      "plans": {
+        "pid": [
+          "SEARCH events USING INDEX ix_events_process_pid (host_id=? AND boot_id=? AND <expr>=? AND subject_id>?)"
+        ],
+        "parent_pid": [
+          "SEARCH events USING INDEX ix_events_process_parent_pid (host_id=? AND boot_id=? AND <expr>=? AND subject_id>?)"
+        ],
+        "related_events": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_next_page": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "related_time_range": [
+          "CO-ROUTINE anon_1",
+          "COMPOUND QUERY",
+          "LEFT-MOST SUBQUERY",
+          "CO-ROUTINE anon_2",
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_2",
+          "UNION USING TEMP B-TREE",
+          "CO-ROUTINE anon_3",
+          "SEARCH events USING INDEX ix_events_subject_id_timestamp (subject_id=? AND timestamp>? AND timestamp<?)",
+          "SCAN anon_3",
+          "SCAN anon_1",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ],
+        "actor_events": [
+          "SEARCH events USING INDEX ix_events_actor_id_timestamp (actor_id=?)"
+        ]
+      }
+    }
+  ]
+}

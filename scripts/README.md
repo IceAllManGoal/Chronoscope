@@ -11,6 +11,14 @@ pwsh scripts/<имя-скрипта>.ps1
 | `dev.ps1` | Поднимает Core и Agent в dev-режиме (§63): синхронизирует окружение, применяет миграции, открывает оба компонента в отдельных окнах |
 | `test.ps1` | Прогоняет тесты Core и Agent (§58) |
 | `reset-dev-data.ps1` | Удаляет локальные dev-данные Chronoscope из `data/` |
+| `benchmark-connect.py` | 1k/20k Events, планы реальных запросов, first/warm и число SELECT, до/после индексов |
+| `check-connect-mutations.py` | Семь временных дефектов, focused regressions и восстановление исходников; запускать отдельно от тестов/Core |
+| `e2e-connect.py` | Настоящие Windows Agent/Core/процессы, отдельные БД/порт/Agent data, API/CLI/restart; browser остаётся PENDING до ручной проверки |
+
+Python-скрипты запускаются из `core`: `uv run python ../scripts/<имя>.py`.
+E2E требует собранного Agent. `--keep-core` сохраняет тестовый Core для
+браузера, `--ui-fixtures` добавляет отдельно маркированные синтетические данные
+для XSS/conflict. Команды и протокол — [DEVELOPMENT](../docs/DEVELOPMENT.md).
 
 `docker-compose.yml` в репозитории нет: Chronoscope — локальный продукт, а Agent обязан быть Windows-native процессом ([ADR-0010](../docs/decisions/0010-no-containerization-in-0.0.1.md)).
 

@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-10",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.13.12",
+  "runs": [
+    {
+      "run": "connect-e2e-20261010T105417Z",
+      "pipeline": "PASS",
+      "restart": "PASS",
+      "launched_target_processes": 5,
+      "chain_pids": [
+        20876,
+        18248,
+        17556
+      ],
+      "chain_starts_observed": 3,
+      "chain_exits_observed": 3,
+      "resolved_chain_links": 2,
+      "orphan_child_pid": 1960,
+      "missing_parent_pid": 20180,
+      "orphan_relation": "insufficient_observation",
+      "root_id": "proc_01M4JQ66CNKS9W1ER3SHN4M8BM",
+      "observed_tree_nodes": 5,
+      "system_event_count": 0,
+      "browser": "PASS: chain navigation; final safety/error checks repeated in next run"
+    },
+    {
+      "run": "connect-e2e-20261010T113804Z",
+      "pipeline": "PASS",
+      "restart": "PASS",
+      "launched_target_processes": 5,
+      "chain_pids": [
+        28756,
+        29252,
+        29424
+      ],
+      "chain_starts_observed": 3,
+      "chain_exits_observed": 3,
+      "resolved_chain_links": 2,
+      "orphan_child_pid": 29064,
+      "missing_parent_pid": 5424,
+      "orphan_relation": "insufficient_observation",
+      "root_id": "proc_01M4JSPCFDJ44MAJB129BMMV1J",
+      "observed_tree_nodes": 5,
+      "system_event_count": 0,
+      "browser": "PASS"
+    }
+  ],
+  "browser_checks_final_run": [
+    "Keyboard Enter: Event -> Process; focus moves to detail",
+    "Process -> Parent -> Child; back restores previous view",
+    "Tree contains real powershell/cmd/PING chain and observed conhosts",
+    "Depth 1 explicitly reports depth_limit; depth 3 shows full observed subtree",
+    "Related events -> Event -> Back -> Tree",
+    "Main list remains on page 2 with page size 5 during detail navigation",
+    "Missing parent is text/PID, no fabricated clickable instance",
+    "Synthetic conflicting parent PID renders Conflict, not a resolved parent",
+    "Synthetic <img ...> name stays text; DOM img count 0, no JavaScript dialog",
+    "Root-only tree explains no established descendants",
+    "No browser error logs before the deliberate Core shutdown",
+    "Stopped isolated Core gives Core does not respond and recovery hint",
+    "Screenshot inspected: nested tree and long identifiers fit without horizontal overflow"
+  ],
+  "browser_result": "PASS",
+  "notes": [
+    "Only controlled target process metadata is copied; raw databases/logs stay in ignored data/.",
+    "First run preceded the final adversarial refinements/version bump; second ran final backend 0.0.5.",
+    "Synthetic UI fixtures are not counted as Windows observations.",
+    "Both owned Core instances and all harness-owned helpers were stopped after verification."
+  ]
+}

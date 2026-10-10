@@ -1,5 +1,23 @@
 # Chronoscope Core
 
+## Connect 0.0.5
+
+`GET /api/v1/processes/{id}/relations?limit=100` возвращает родителя, детей,
+кандидатов и свидетельства; `/tree?depth=3&max_nodes=200` — ограниченное дерево.
+`GET /api/v1/events?entity_id={id}` объединяет сохранённые actor/subject ссылки
+через общий курсор. Полный контракт, ошибки и смысл resolved —
+[Connect API](../docs/CONNECT_API.md).
+
+```powershell
+uv run chronoscope process-relations proc_<ULID>
+uv run chronoscope process-tree proc_<ULID> --depth 3 --max-nodes 200
+uv run chronoscope events --entity-id proc_<ULID> --limit 25
+```
+
+Перед запуском Core применить `uv run alembic upgrade head`: миграция 0003
+добавляет индексы PID/parent PID и не меняет Events. Старый `process <id>`
+сохраняет исторический контракт; актуальную проверку связей даёт `process-relations`.
+
 Ядро Chronoscope: принимает сырые события от Agent, нормализует их, хранит и отдаёт через локальный API.
 
 Полное описание проекта, архитектуры и модели событий — в корне репозитория:
