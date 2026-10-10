@@ -137,6 +137,7 @@ def _resolve_parent(
     # потомка, — то есть в ``actor`` попал бы чужой экземпляр. Это не неточность, а
     # утверждение, которого в наблюдениях не было (§14, §20).
     parent = context.find_process_instance(
+        host_id=raw_event.host_id,
         boot_id=raw_event.boot_id,
         pid=parent_pid,
         before=child_started_at,

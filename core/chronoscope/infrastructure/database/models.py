@@ -30,6 +30,8 @@ from sqlalchemy import (
     MetaData,
     Table,
     Text,
+    func,
+    literal_column,
 )
 
 metadata = MetaData()
@@ -92,3 +94,13 @@ Index("ix_raw_events_collector_source_timestamp", raw_events.c.collector, raw_ev
 #: Атрибут нормализованного события, по которому ищется родительский процесс.
 #: Вынесено сюда, потому что этим путём пользуется и репозиторий, и тесты.
 ATTRIBUTE_PID_PATH = "$.pid"
+
+# ADR-0017: measured lookup patterns, scoped by host and boot before PID.
+# Literal paths match the expression emitted by relationship queries.
+for _field in ("pid", "parent_pid"):
+    Index(
+        "ix_events_process_" + _field,
+        events.c.host_id, events.c.boot_id,
+        func.json_extract(events.c.attributes_json, literal_column("'$." + _field + "'")),
+        events.c.subject_id,
+    )

@@ -256,7 +256,7 @@ class TestApiResponsesMatchContract:
         # сохранённых событий: идентификатор выведен из его времени старта,
         # имя взято из его собственного события старта.
         context = NormalizationContext(
-            find_process_instance=lambda *, boot_id, pid, before: EntityRef(
+            find_process_instance=lambda *, host_id, boot_id, pid, before: EntityRef(
                 "process", expected["actor"]["id"], expected["actor"]["name"]
             )
         )

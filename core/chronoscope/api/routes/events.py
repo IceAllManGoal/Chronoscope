@@ -61,6 +61,7 @@ def list_events(
     source: str | None = Query(None, description="Источник события, например windows.process"),
     actor_id: str | None = Query(None, description="Идентификатор сущности-актора"),
     subject_id: str | None = Query(None, description="Идентификатор сущности-субъекта"),
+    entity_id: str | None = Query(None, description="Сохранённая ссылка actor OR subject; не причинность"),
     from_: datetime | None = Query(None, alias="from", description="Начало периода, включительно"),
     to: datetime | None = Query(None, description="Конец периода, включительно"),
     use_case: ListEvents = Depends(get_list_events),
@@ -72,6 +73,7 @@ def list_events(
         source=source,
         actor_id=actor_id,
         subject_id=subject_id,
+        entity_id=entity_id,
         time_from=_as_utc(from_, "from"),
         time_to=_as_utc(to, "to"),
     )

@@ -215,6 +215,12 @@ def _parent(events: Sequence[Event]) -> ProcessParent:
     появился там к моменту завершения. Выбирать при этом «более удачное»
     наблюдение — не догадка: оба наблюдения записаны в самих событиях.
     """
+    pids = {_attribute_int(e, PAYLOAD_FIELD_PARENT_PID) for e in events}
+    pids.discard(None)
+    actors = {e.actor.id for e in events if e.actor is not None}
+    if len(pids) > 1 or len(actors) > 1:
+        return ProcessParent(pid=next(iter(pids)) if len(pids) == 1 else None)
+
     parent_pid: int | None = None
     actor = None
 

@@ -50,20 +50,28 @@ class TestMigrations:
                     f"{table_name}.{name}: nullable расходится"
                 )
 
-            database_indexes = {index["name"] for index in inspector.get_indexes(table_name)}
+            with migrated_engine.connect() as connection:
+                database_indexes = set(connection.execute(sa.text(
+                    "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=:table AND sql IS NOT NULL"
+                ), {"table": table_name}).scalars())
             model_indexes = {index.name for index in metadata.tables[table_name].indexes}
             assert database_indexes == model_indexes, f"расхождение индексов в {table_name}"
 
     def test_expected_indexes_present(self, migrated_engine) -> None:  # noqa: ANN001
         """§27 перечисляет конкретные индексы — они должны существовать."""
-        inspector = sa.inspect(migrated_engine)
-        assert {index["name"] for index in inspector.get_indexes("events")} == {
+        with migrated_engine.connect() as connection:
+            names = set(connection.execute(sa.text(
+                "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='events' AND sql IS NOT NULL"
+            )).scalars())
+        assert names == {
             "ix_events_timestamp",
             "ix_events_type_timestamp",
             "ix_events_actor_id_timestamp",
             "ix_events_subject_id_timestamp",
+            "ix_events_process_pid",
+            "ix_events_process_parent_pid",
         }
-        assert {index["name"] for index in inspector.get_indexes("raw_events")} == {
+        assert {index["name"] for index in sa.inspect(migrated_engine).get_indexes("raw_events")} == {
             "ix_raw_events_collector_source_timestamp"
         }
 

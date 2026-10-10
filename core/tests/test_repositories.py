@@ -19,7 +19,7 @@ from chronoscope.domain.events.event_type import (
     PROCESS_STARTED,
 )
 from chronoscope.application.ports import MAX_PAGE_LIMIT, EventQuery
-from chronoscope.domain.ids import new_event_id
+from chronoscope.domain.ids import process_instance_id, new_event_id
 from chronoscope.infrastructure.database.repositories import (
     decode_cursor,
     encode_cursor,
@@ -333,7 +333,7 @@ class TestProcessInstanceLookup:
                 timestamp=timestamp,
                 raw_event_id=None,
                 boot_id=boot_id,
-                subject=EntityRef("process", instance_id, f"pid{pid}.exe"),
+                subject=EntityRef("process", process_instance_id(host_id=HOST_ID, boot_id=boot_id, pid=pid, started_at=timestamp), f"pid{pid}.exe"),
                 attributes={"pid": pid},
             ),
             ingested_at=INGESTED_AT,
@@ -347,10 +347,10 @@ class TestProcessInstanceLookup:
         )
 
         found = event_repository.find_process_instance(
-            boot_id=BOOT_ID, pid=4312, before=started + timedelta(minutes=5)
+            host_id=HOST_ID,             boot_id=BOOT_ID, pid=4312, before=started + timedelta(minutes=5)
         )
         assert found is not None
-        assert found.id == parent_instance
+        assert found.id == process_instance_id(host_id=HOST_ID, boot_id=BOOT_ID, pid=4312, started_at=started)
         # Имя берётся из события старта родителя: в событиях запуска потомка
         # приходит только parent_pid, поэтому иначе имя было бы неизвестно.
         assert found.name == "pid4312.exe"
@@ -367,7 +367,7 @@ class TestProcessInstanceLookup:
             instance_id="proc_01K5R8Z9M0A1B2C3D4E5F6G7H8",
         )
 
-        assert event_repository.find_process_instance(boot_id=None, pid=4312, before=started) is None
+        assert event_repository.find_process_instance(host_id=HOST_ID, boot_id=None, pid=4312, before=started) is None
 
     def test_ignores_events_from_another_boot(self, event_repository) -> None:
         started = datetime(2026, 9, 18, 10, 0, 0, tzinfo=UTC)
@@ -376,7 +376,7 @@ class TestProcessInstanceLookup:
             instance_id="proc_01K5R8Z9M0A1B2C3D4E5F6G7H8",
         )
 
-        assert event_repository.find_process_instance(boot_id=BOOT_ID, pid=4312, before=started) is None
+        assert event_repository.find_process_instance(host_id=HOST_ID, boot_id=BOOT_ID, pid=4312, before=started) is None
 
     def test_respects_before_bound(self, event_repository) -> None:
         """Родитель не может быть найден по событию, которое произошло позже."""
@@ -387,7 +387,7 @@ class TestProcessInstanceLookup:
         )
 
         found = event_repository.find_process_instance(
-            boot_id=BOOT_ID, pid=4312, before=started - timedelta(seconds=1)
+            host_id=HOST_ID,             boot_id=BOOT_ID, pid=4312, before=started - timedelta(seconds=1)
         )
         assert found is None
 
@@ -398,10 +398,10 @@ class TestProcessInstanceLookup:
             instance_id="proc_01K5R8Z9M0A1B2C3D4E5F6G7H8",
         )
 
-        assert event_repository.find_process_instance(boot_id=BOOT_ID, pid=9999, before=started) is None
+        assert event_repository.find_process_instance(host_id=HOST_ID, boot_id=BOOT_ID, pid=9999, before=started) is None
 
-    def test_picks_most_recent_instance_for_reused_pid(self, event_repository) -> None:
-        """При переиспользовании PID берётся ближайший предшествующий экземпляр."""
+    def test_does_not_pick_between_competing_instances(self, event_repository) -> None:
+        """Без exit два возможных родителя остаются неоднозначными (ADR-0017)."""
         base = datetime(2026, 9, 18, 10, 0, 0, tzinfo=UTC)
         older = "proc_01K5R8Z9M0A1B2C3D4E5F6G7H8"
         newer = "proc_01K5R8Z9M1C2D3E4F5G6H7J8K9"
@@ -412,10 +412,9 @@ class TestProcessInstanceLookup:
         )
 
         found = event_repository.find_process_instance(
-            boot_id=BOOT_ID, pid=4312, before=base + timedelta(minutes=20)
+            host_id=HOST_ID,             boot_id=BOOT_ID, pid=4312, before=base + timedelta(minutes=20)
         )
-        assert found is not None
-        assert found.id == newer
+        assert found is None
 
 
 class TestInstanceEvents:
