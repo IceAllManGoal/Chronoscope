@@ -122,15 +122,24 @@ def _resolve_parent(
     raw_event: RawEvent,
     context: NormalizationContext,
     attributes: dict[str, Any],
+    *,
+    child_started_at: datetime,
 ) -> EntityRef | None:
     parent_pid = attributes.get("parent_pid")
     if parent_pid is None:
         return None
 
+    # Граница поиска — время старта потомка, а не время текущего события.
+    #
+    # Родитель мог существовать только до того, как потомок запустился. В событии
+    # завершения время наблюдения на минуты позже старта, и поиск «до времени
+    # завершения» вернул бы процесс, который получил этот PID уже **после** запуска
+    # потомка, — то есть в ``actor`` попал бы чужой экземпляр. Это не неточность, а
+    # утверждение, которого в наблюдениях не было (§14, §20).
     parent = context.find_process_instance(
         boot_id=raw_event.boot_id,
         pid=parent_pid,
-        before=raw_event.best_timestamp,
+        before=child_started_at,
     )
 
     # Флаг нужен пользователю: он различает «родителя не было» и «родитель был,
@@ -178,7 +187,7 @@ def _normalize(
     )
 
     attributes = _build_attributes(raw_event, is_exit=is_exit)
-    actor = _resolve_parent(raw_event, context, attributes)
+    actor = _resolve_parent(raw_event, context, attributes, child_started_at=process_started_at)
 
     return Event(
         schema_version=raw_event.schema_version,

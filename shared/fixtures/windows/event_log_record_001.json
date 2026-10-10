@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "raw_event_id": "raw_01K7Q4M3S6N9V2Z5W8Y1B4D7F0",
+  "collector": "windows.eventlog",
+  "collector_version": "0.0.4",
+  "observed_at": "2026-10-09T18:20:04.180Z",
+  "source_timestamp": "2026-10-09T18:20:04.117Z",
+  "host_id": "host_01K5R8Z9M4Q7T2V6X1B3D5F7H9",
+  "boot_id": "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA",
+  "payload_type": "event_log_record",
+  "payload": {
+    "channel": "System",
+    "provider": "Microsoft-Windows-Kernel-General",
+    "event_id": 12,
+    "record_id": 48213,
+    "level": 4,
+    "task": 0,
+    "opcode": 0
+  }
+}

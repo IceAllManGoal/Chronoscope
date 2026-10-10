@@ -100,9 +100,14 @@ class NormalizerRegistry:
 def default_registry() -> NormalizerRegistry:
     """Реестр со всеми нормализаторами, поддерживаемыми этой версией Core."""
     from chronoscope.domain.events.event_type import (
+        COLLECTOR_WINDOWS_EVENTLOG,
         COLLECTOR_WINDOWS_PROCESS,
+        PAYLOAD_EVENT_LOG_RECORD,
         PAYLOAD_PROCESS_EXIT,
         PAYLOAD_PROCESS_START,
+    )
+    from chronoscope.normalization.windows.event_log_normalizer import (
+        normalize_event_log_record,
     )
     from chronoscope.normalization.windows.process_normalizer import (
         normalize_process_exit,
@@ -119,5 +124,15 @@ def default_registry() -> NormalizerRegistry:
         collector=COLLECTOR_WINDOWS_PROCESS,
         payload_type=PAYLOAD_PROCESS_EXIT,
         handler=normalize_process_exit,
+    )
+
+    # Второй источник подключается той же регистрацией, а не ветвлением по
+    # имени коллектора: §77.2 (пункт 7) запрещает `if collector == ...` в ядре,
+    # и это не формальность — с ветвлением следующий источник потребовал бы
+    # правки ядра, а с реестром достаточно нового модуля.
+    registry.register(
+        collector=COLLECTOR_WINDOWS_EVENTLOG,
+        payload_type=PAYLOAD_EVENT_LOG_RECORD,
+        handler=normalize_event_log_record,
     )
     return registry

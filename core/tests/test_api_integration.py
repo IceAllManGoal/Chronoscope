@@ -560,3 +560,85 @@ class TestErrorEnvelope:
         assert set(body) == {"error"}
         assert set(body["error"]) == {"code", "message", "details"}
         assert json.dumps(body)  # сериализуемо
+
+
+class TestMixedHistory:
+    """§77.2, пункт 8: API видит оба источника в одной истории.
+
+    Отдельного экрана для журнала нет и не требуется: источник — такое же поле
+    события, как тип, и существующий фильтр ``source`` различает их. Проверки
+    ниже фиксируют это на настоящем приложении и настоящей SQLite, то есть на том
+    пути, которым пользуются CLI и страница.
+    """
+
+    @staticmethod
+    def ingest_both_sources(client: TestClient) -> None:
+        assert ingest_fixture_batch(client).status_code == 200
+        journal = load_fixture("windows", "event_log_record_001.json")
+        assert post_events(client, [journal]).status_code == 200
+
+    def test_both_sources_are_in_one_history(self, client: TestClient) -> None:
+        self.ingest_both_sources(client)
+
+        body = client.get(f"{API}/events", params={"limit": 50}).json()
+
+        assert body["count"] == 3
+        assert {event["source"] for event in body["events"]} == {"windows.process", "windows.eventlog"}
+
+    def test_source_filter_separates_the_sources(self, client: TestClient) -> None:
+        self.ingest_both_sources(client)
+
+        journal = client.get(f"{API}/events", params={"source": "windows.eventlog"}).json()
+        process = client.get(f"{API}/events", params={"source": "windows.process"}).json()
+
+        assert journal["count"] == 1
+        assert journal["events"][0]["type"] == "system.event"
+        assert process["count"] == 2
+        assert {event["type"] for event in process["events"]} == {"process.started", "process.exited"}
+
+    def test_journal_event_carries_attributes_and_no_entities(self, client: TestClient) -> None:
+        """Событие журнала не привязано к сущности — и это видно в ответе, а не скрыто."""
+        self.ingest_both_sources(client)
+
+        event = client.get(f"{API}/events", params={"source": "windows.eventlog"}).json()["events"][0]
+
+        assert event["attributes"] == {
+            "channel": "System",
+            "provider": "Microsoft-Windows-Kernel-General",
+            "event_id": 12,
+            "record_id": 48213,
+            "level": 4,
+            "task": 0,
+            "opcode": 0,
+        }
+        assert event["actor"] is None
+        assert event["subject"] is None
+
+    def test_journal_event_timestamp_is_the_record_time(self, client: TestClient) -> None:
+        """§24: время события — время записи в журнале, а не момент наблюдения."""
+        self.ingest_both_sources(client)
+
+        event = client.get(f"{API}/events", params={"source": "windows.eventlog"}).json()["events"][0]
+
+        assert event["timestamp"] == "2026-10-09T18:20:04.117Z"
+        assert event["observed_at"] == "2026-10-09T18:20:04.180Z"
+
+    def test_journal_event_is_readable_by_identifier(self, client: TestClient) -> None:
+        """`event <id>` и страница подробностей работают и без сущностей."""
+        self.ingest_both_sources(client)
+
+        listed = client.get(f"{API}/events", params={"source": "windows.eventlog"}).json()["events"][0]
+        detail = client.get(f"{API}/events/{listed['id']}")
+
+        assert detail.status_code == 200
+        assert detail.json()["attributes"]["channel"] == "System"
+
+    def test_mixed_batch_fixture_ingests(self, client: TestClient) -> None:
+        """Оба источника в одном пакете — так их и увидит Core от одного Agent."""
+        batch = load_fixture("ingest", "ingest_batch_mixed_001.json")
+
+        response = client.post(f"{API}/ingest/raw-events", json=batch)
+
+        assert response.status_code == 200
+        assert response.json()["accepted"] == 2
+        assert client.get(f"{API}/events").json()["count"] == 2

@@ -15,16 +15,20 @@
 | `windows/process_start_001.json` | Базовый `process.started`: полный набор полей, включая `path`, `command_line`, `user_sid` | да |
 | `windows/process_exit_001.json` | Парный `process.exited` для того же process instance | да |
 | `windows/process_start_missing_path.json` | Отсутствие опциональных полей payload (`path`, `command_line`, `user_sid`, `process_started_at`) — §60: одно неполное событие не должно ломать pipeline | да |
+| `windows/event_log_record_001.json` | Запись журнала Windows (`windows.eventlog`): канал, поставщик, `event_id`, `record_id`, `level`. Сообщения нет — оно появляется только при `capture_message` | да |
 | `windows/malformed_event.json` | **Намеренно невалидное** событие — негативный тест ingest | **нет, ожидаемо** |
 | `ingest/ingest_batch_001.json` | Batch envelope из двух событий, `POST /api/v1/ingest/raw-events` | да |
+| `ingest/ingest_batch_mixed_001.json` | Тот же маршрут, но в одном пакете оба источника: `windows.process` и `windows.eventlog` — так их увидит Core от одного Agent (§77.2, пункт 8) | да |
 | `events/process_started_001.json` | Ожидаемый результат нормализации `windows/process_start_001.json` | да |
 | `events/process_exited_001.json` | Ожидаемый результат нормализации `windows/process_exit_001.json` | да |
+| `events/system_event_001.json` | Ожидаемый результат нормализации `windows/event_log_record_001.json`: `system.event` без `actor` и `subject` | да |
 
 ## Соглашения
 
 - `host_id` и `boot_id` во всех windows-фикстурах одинаковые: они описывают одну машину в рамках одной загрузки ОС. Так фикстуры образуют связную историю, пригодную для проверки группировки по boot session.
 - `process_start_001.json` и `process_exit_001.json` описывают **один и тот же экземпляр процесса**: `pid` 9812, одинаковый `process_started_at`. Из этой пары Core должен вывести одинаковый `process_instance_id` — это основная проверка правила «PID не является идентичностью» (§14).
 - `process_start_missing_path.json` относится к другому процессу (`pid` 1234) в той же boot session.
+- `event_log_record_001.json` — второй источник: он не описывает процесс, поэтому у его нормализованного события нет ни `actor`, ни `subject`. В payload нет ни сообщения, ни данных события, ни XML, ни SID пользователя — так выглядит сбор при уровне детализации Minimal (§37, §77.2 пункт 10). `record_id` здесь — данные источника, а не ключ идемпотентности: дедупликация идёт по `raw_event_id`.
 - `source_timestamp` всегда не позже `observed_at`: так выглядит нормальная задержка между событием в источнике и его наблюдением (§24).
 - `events/process_started_001.json` и `events/process_exited_001.json` — ожидаемый результат нормализации соответствующей windows-фикстуры. Ключевая проверка: `subject.id` в обоих файлах **одинаков** (`proc_01M2T1R61M8W1EMS4WBMRDKSTZ`), хотя события разные. Это прямое следствие требования детерминированности `process_instance_id` из [`docs/EVENT_MODEL.md`](../../docs/EVENT_MODEL.md): идентификатор выводится из `host_id + boot_id + pid + process_started_at`, а не генерируется случайно. Если нормализатор выдаст здесь разные идентификаторы, связь «процесс запустился → процесс завершился» будет потеряна.
 
