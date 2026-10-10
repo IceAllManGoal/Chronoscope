@@ -1576,7 +1576,8 @@ chronoscope/
 │       ├── 0007-local-only-api.md
 │       ├── 0008-no-microservices.md
 │       ├── 0009-mit-license.md
-│       └── 0010-no-containerization-in-0.0.1.md
+│       ├── 0010-no-containerization-in-0.0.1.md
+│       └── 0011…0016 (перечень — в docs/decisions/README.md)
 │
 ├── agent/
 │   ├── Chronoscope.Agent.sln
@@ -1617,7 +1618,7 @@ chronoscope/
     └── .gitkeep
 ```
 
-Дерево выше — целевая раскладка. Фактическое состояние на момент 0.0.2 (критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре, а не замыслу):
+Дерево выше — целевая раскладка. Фактическое состояние на момент 0.0.4 (критерий качества §76 требует, чтобы спека соответствовала реальной архитектуре, а не замыслу):
 
 ```text
 готово       README.md, LICENSE, CONTRIBUTING.md, SECURITY.md, CHANGELOG.md,
@@ -1671,7 +1672,8 @@ core/chronoscope/
 ├── normalization/
 │   ├── registry.py
 │   └── windows/
-│       └── process_normalizer.py
+│       ├── process_normalizer.py
+│       └── event_log_normalizer.py
 │
 ├── infrastructure/
 │   ├── config/
