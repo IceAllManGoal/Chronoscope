@@ -260,6 +260,35 @@ public class BatchSenderTests
         Assert.Equal(2, sender.Snapshot().EventsSent);
     }
 
+    /// <summary>
+    /// Завершённый буфер — это не «сейчас событий нет», а «писатель закрыт».
+    /// Ожидание на закрытом канале возвращается мгновенно, поэтому отправитель
+    /// обязан на этом выйти. Иначе цикл становится бесконечным, и Agent,
+    /// потерявший все источники, продолжает жить, ничего не наблюдая, — ровно
+    /// тот исход, который ADR-0016 называет худшим из возможных.
+    ///
+    /// Токен здесь не отменяется вовсе: выход обязан произойти сам. Без
+    /// ограничения по времени тест висел бы вечно, поэтому ожидание ограничено
+    /// и его истечение и есть падение.
+    /// </summary>
+    [Fact]
+    public async Task RunAsyncFinishesWhenTheBufferIsCompleted()
+    {
+        var buffer = new BoundedEventBuffer(capacity: 100);
+        var client = new FakeIngestClient();
+        var sender = new BatchSender(buffer, client, new DeliverySettings { BatchSize = 100, FlushIntervalMs = 60_000 });
+
+        buffer.Publish(Event(0));
+        var running = sender.RunAsync(CancellationToken.None);
+        await WaitUntilAsync(() => sender.PendingBatchSize == 1);
+
+        buffer.Complete();
+
+        await running.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Single(client.Received);
+    }
+
     [Fact]
     public void StatisticsStartAtZero()
     {

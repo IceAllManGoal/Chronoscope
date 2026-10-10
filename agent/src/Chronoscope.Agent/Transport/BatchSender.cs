@@ -79,7 +79,8 @@ public sealed class BatchSender
 
     /// <summary>
     /// Цикл доставки. Возвращает управление после отмены, успев предпринять
-    /// последнюю попытку отправить накопленный пакет (§62).
+    /// последнюю попытку отправить накопленный пакет (§62), — и раньше, если
+    /// буфер завершён: доставлять больше нечего.
     /// </summary>
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -89,7 +90,13 @@ public sealed class BatchSender
             {
                 if (await CollectBatchAsync(cancellationToken).ConfigureAwait(false) == 0)
                 {
-                    continue;
+                    // Ноль означает не «сейчас событий нет», а «писатель закрыт»:
+                    // CollectBatchAsync возвращает его только тогда, когда ожидание
+                    // сообщило о завершении буфера. Ждать больше нечего, а повторное
+                    // ожидание на закрытом канале возвращается мгновенно — цикл стал
+                    // бы бесконечным, и Agent, потерявший все источники, продолжал бы
+                    // жить, ничего не наблюдая (ADR-0016 называет это худшим исходом).
+                    break;
                 }
 
                 if (await DeliverAsync(_pending, cancellationToken).ConfigureAwait(false))
