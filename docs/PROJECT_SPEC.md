@@ -2573,6 +2573,36 @@ git tag v0.0.1
 
 ---
 
+## 77.3. Definition of Done 0.0.5 «Connect»
+
+Критерий версии: Chronoscope позволяет исследовать наблюдаемые связи между
+конкретными экземплярами процессов, строить ограниченное дерево и переходить
+к связанным событиям, не выдавая гипотезы за установленные системные факты.
+Семантика и design review API — [ADR-0017](decisions/0017-evidence-based-process-relationships.md).
+Этот раздел дополняет §71; принятые DoD прошлых версий не изменяются.
+
+| № | Требование | Способ подтверждения |
+|---|---|---|
+| 1 | Связи ссылаются на process instance ID; PID только ищет кандидатов | Domain/integration: reuse PID, host, boot, identity |
+| 2 | resolved означает согласованного кандидата из наблюдений; известны причина и evidence | Domain: lifecycle, missing exit, ambiguous candidates; сверка API |
+| 3 | Разные host/boot, parent после child и exit до child не создают связи | Отдельные отрицательные регрессии и mutation checks |
+| 4 | Противоречащие parent PID/actor/timestamps не выбираются молча | Domain и API регрессии конфликтов |
+| 5 | API непосредственных связей различает неизвестный процесс, пустоту и конфликт | HTTP integration: 200/404/422, лимиты, evidence |
+| 6 | Дерево ограничено depth/nodes/evidence, имеет стабильный порядок и защиту от циклов | Chain/wide/cycle/limit тесты; реальные query plans и число SQL |
+| 7 | Entity-related events используют общую пагинацию actor OR subject | HTTP/repository: dedup, равные timestamps, курсоры, фильтры, system.event исключён |
+| 8 | UI поддерживает Event → Process → Parent/Children → Tree → Events и назад | Настоящий браузер, сохранение фильтров/страницы, keyboard/error/XSS проверки |
+| 9 | CLI через Core показывает relations/tree и неизвестность, имеет bounded параметры и exit codes | CLI integration на настоящем HTTP + Windows E2E |
+| 10 | Поздние/повторные/неполные события обрабатываются без изменения истории | Ingest integration, immutable snapshots, restart, missing parent |
+| 11 | Запросы ограничены; нет необоснованного N+1, индексы подтверждены измерениями | Детерминированные 1k/10k+ события, cold/warm, EXPLAIN, SQL counts |
+| 12 | Полный pipeline подтверждён живым Windows E2E | Agent/Core/SQLite/API/CLI/browser, long-lived chain, все попытки и счётчики, restart |
+| 13 | Документация, версии и release gate соответствуют факту; регрессии 0.0.1–0.0.4 проходят | Полные Core/Agent suites, review, таблица PASS/FAIL/BLOCKED с evidence |
+
+Temporal context, новые collectors, ETW, materialized graph, Timeline и
+confidence scoring не входят в эту версию. Неполнота наблюдения всегда видима.
+Без живого E2E статус версии — NOT READY, gate 12 — BLOCKED.
+
+---
+
 # 78. Product success criteria
 
 Chronoscope нельзя оценивать только количеством функций.
