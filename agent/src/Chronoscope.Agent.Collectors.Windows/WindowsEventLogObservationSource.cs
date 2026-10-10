@@ -30,8 +30,16 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
 
     private readonly EventLogCollectorSettings _settings;
 
-    /// <summary>Наблюдение остановлено. Читается обработчиками из потоков Windows.</summary>
-    private volatile bool _stopped;
+    /// <summary>
+    /// Состояние одного наблюдения. Отдельный объект, а не поле класса: остановка —
+    /// свойство конкретного наблюдения, и после его завершения она не должна
+    /// действовать на следующее. Флаг, оставшийся с прошлого раза, молча превратил
+    /// бы все записи нового наблюдения в пропущенные.
+    /// </summary>
+    private sealed class WatchState
+    {
+        public volatile bool Stopped;
+    }
 
     public WindowsEventLogObservationSource(EventLogCollectorSettings settings)
     {
@@ -43,6 +51,17 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
     {
         ArgumentNullException.ThrowIfNull(onObservation);
 
+        if (_settings.Channels.Count == 0)
+        {
+            // Пустой список нельзя принять: наблюдения не будет, а ожидание
+            // отмены выглядело бы как работающий источник, который просто молчит.
+            // При загрузке конфигурации такой случай отвергается раньше; здесь
+            // проверка стоит потому, что источник создаётся и напрямую.
+            throw new CollectorException(
+                "не задан ни один канал журнала: наблюдать нечего");
+        }
+
+        var state = new WatchState();
         var failure = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var watchers = new List<EventLogWatcher>(_settings.Channels.Count);
@@ -53,7 +72,7 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
         {
             foreach (var channel in _settings.Channels)
             {
-                watchers.Add(Subscribe(channel, onObservation, failure));
+                watchers.Add(Subscribe(channel, state, onObservation, failure));
             }
 
             var finished = await Task.WhenAny(failure.Task, cancelled.Task).ConfigureAwait(false);
@@ -71,13 +90,14 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
         }
         finally
         {
-            Stop(watchers);
+            Stop(watchers, state);
         }
     }
 
     /// <summary>Подписаться на канал. Ошибка подписки — сразу <see cref="CollectorException"/>.</summary>
     private EventLogWatcher Subscribe(
         string channel,
+        WatchState state,
         Action<EventLogObservation> onObservation,
         TaskCompletionSource<Exception> failure)
     {
@@ -93,7 +113,7 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
             throw new CollectorException($"канал {channel} недоступен: {exception.Message}", exception);
         }
 
-        watcher.EventRecordWritten += (_, arguments) => OnRecordWritten(channel, arguments, onObservation, failure);
+        watcher.EventRecordWritten += (_, arguments) => OnRecordWritten(channel, state, arguments, onObservation, failure);
 
         try
         {
@@ -118,6 +138,7 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
     /// </summary>
     private void OnRecordWritten(
         string channel,
+        WatchState state,
         EventRecordWrittenEventArgs arguments,
         Action<EventLogObservation> onObservation,
         TaskCompletionSource<Exception> failure)
@@ -141,7 +162,7 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
 
             try
             {
-                if (_stopped)
+                if (state.Stopped)
                 {
                     // Запись пришла уже после остановки наблюдения. Публиковать её
                     // нельзя: буфер к этому моменту может быть закрыт, и событие
@@ -202,13 +223,13 @@ public sealed class WindowsEventLogObservationSource : IEventLogObservationSourc
     /// <summary>
     /// Закрыть подписки.
     ///
-    /// <see cref="_stopped"/> выставляется до отключения наблюдателей: обработчик,
-    /// уже находящийся в работе, иначе мог бы опубликовать запись после того, как
-    /// точка входа закрыла буфер.
+    /// <see cref="WatchState.Stopped"/> выставляется до отключения наблюдателей:
+    /// обработчик, уже находящийся в работе, иначе мог бы опубликовать запись после
+    /// того, как точка входа закрыла буфер.
     /// </summary>
-    private void Stop(List<EventLogWatcher> watchers)
+    private void Stop(List<EventLogWatcher> watchers, WatchState state)
     {
-        _stopped = true;
+        state.Stopped = true;
 
         foreach (var watcher in watchers)
         {

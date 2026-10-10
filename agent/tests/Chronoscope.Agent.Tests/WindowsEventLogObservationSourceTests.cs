@@ -77,4 +77,50 @@ public class WindowsEventLogObservationSourceTests
 
         await source.WatchAsync(_ => { }, cancellation.Token).WaitAsync(TimeSpan.FromSeconds(10));
     }
+
+    /// <summary>
+    /// Пустой список каналов — отказ, а не бесконечное ожидание отмены.
+    ///
+    /// Иначе источник выглядел бы работающим и просто молчащим: «ничего не
+    /// приходит» стало бы неотличимо от «наблюдать не за чем». При загрузке
+    /// конфигурации такой случай отвергается раньше, но источник создаётся и
+    /// напрямую — в тестах и в будущем коде.
+    /// </summary>
+    [Fact]
+    public async Task EmptyChannelListIsRefused()
+    {
+        var source = new WindowsEventLogObservationSource(
+            new EventLogCollectorSettings { Enabled = true, Channels = [] });
+
+        var exception = await Assert.ThrowsAsync<CollectorException>(() =>
+            source.WatchAsync(_ => { }, CancellationToken.None));
+
+        Assert.Contains("ни один канал", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Тем же источником можно наблюдать повторно: остановка — свойство конкретного
+    /// наблюдения, а не самого объекта. Проверяется то, что проверяемо без записи в
+    /// журнал: второе наблюдение поднимается и снимается по отмене без отказа.
+    /// </summary>
+    [Fact]
+    public async Task SubscriptionCanBeStartedAgainAfterCancellation()
+    {
+        var source = new WindowsEventLogObservationSource(Settings("Application"));
+
+        using (var first = new CancellationTokenSource())
+        {
+            var firstWatch = source.WatchAsync(_ => { }, first.Token);
+            await Task.Delay(300);
+            first.Cancel();
+            await firstWatch.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        using var second = new CancellationTokenSource();
+        var secondWatch = source.WatchAsync(_ => { }, second.Token);
+        await Task.Delay(300);
+        second.Cancel();
+
+        await secondWatch.WaitAsync(TimeSpan.FromSeconds(10));
+    }
 }
