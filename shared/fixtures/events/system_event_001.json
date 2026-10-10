@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "evt_01K7Q4M3S8P1X4Y7A0C3E6G9J2",
+  "timestamp": "2026-10-09T18:20:04.117Z",
+  "observed_at": "2026-10-09T18:20:04.180Z",
+  "type": "system.event",
+  "source": "windows.eventlog",
+  "host_id": "host_01K5R8Z9M4Q7T2V6X1B3D5F7H9",
+  "boot_id": "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HA",
+  "actor": null,
+  "subject": null,
+  "attributes": {
+    "channel": "System",
+    "provider": "Microsoft-Windows-Kernel-General",
+    "event_id": 12,
+    "record_id": 48213,
+    "level": 4,
+    "task": 0,
+    "opcode": 0
+  },
+  "raw_event_id": "raw_01K7Q4M3S6N9V2Z5W8Y1B4D7F0",
+  "trace_id": null,
+  "tags": []
+}

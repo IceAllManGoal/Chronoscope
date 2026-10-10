@@ -42,11 +42,13 @@ RAW_FIXTURES = [
     ("windows", "process_start_001.json"),
     ("windows", "process_exit_001.json"),
     ("windows", "process_start_missing_path.json"),
+    ("windows", "event_log_record_001.json"),
     ("windows", "malformed_event.json"),
 ]
 EVENT_FIXTURES = [
     ("events", "process_started_001.json"),
     ("events", "process_exited_001.json"),
+    ("events", "system_event_001.json"),
 ]
 
 
@@ -260,6 +262,30 @@ class TestApiResponsesMatchContract:
         assert produced["type"] == expected["type"]
         assert produced["timestamp"] == expected["timestamp"]
         assert produced["attributes"] == expected["attributes"]
+
+    def test_event_log_normalizer_output_matches_committed_fixture(self) -> None:
+        """Второй источник обязан воспроизводить свою фикстуру так же, как первый.
+
+        Проверка идёт через реестр, а не через функцию напрямую: именно реестр
+        решает, каким нормализатором обрабатывается пара «коллектор + payload», и
+        ошибка в регистрации не должна остаться незамеченной.
+        """
+        from chronoscope.normalization.registry import NormalizationContext, default_registry
+
+        expected = load_fixture("events", "system_event_001.json")
+        raw = raw_event_from_contract(load_fixture("windows", "event_log_record_001.json"))
+
+        produced = EventOut.from_domain(
+            default_registry().normalize(raw, NormalizationContext())
+        ).model_dump(mode="json")
+
+        assert produced["type"] == expected["type"]
+        assert produced["source"] == expected["source"]
+        assert produced["timestamp"] == expected["timestamp"]
+        assert produced["observed_at"] == expected["observed_at"]
+        assert produced["attributes"] == expected["attributes"]
+        assert produced["actor"] is None
+        assert produced["subject"] is None
 
 
 class TestDomainAcceptsContractFixtures:

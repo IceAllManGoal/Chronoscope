@@ -19,7 +19,9 @@ import pytest
 from chronoscope.domain.errors import InvalidInputError, NormalizationError
 from chronoscope.domain.events.entity_ref import EntityRef
 from chronoscope.domain.events.event_type import (
+    COLLECTOR_WINDOWS_EVENTLOG,
     COLLECTOR_WINDOWS_PROCESS,
+    PAYLOAD_EVENT_LOG_RECORD,
     PAYLOAD_PROCESS_EXIT,
     PAYLOAD_PROCESS_START,
     PROCESS_EXITED,
@@ -291,9 +293,16 @@ class TestNormalizerRegistry:
         assert default_registry().resolve("plugin.steam", "game_started") is None
 
     def test_registered_pairs_are_reported(self) -> None:
+        """Реестр сообщает все пары, которые умеет обрабатывать эта версия Core.
+
+        Проверка перечисляет пары явно, а не сравнивает размер: набор —
+        часть контракта версии, и его пополнение вторым источником должно быть
+        видно в тесте, а не проходить незамеченным.
+        """
         assert default_registry().registered == {
             (COLLECTOR_WINDOWS_PROCESS, PAYLOAD_PROCESS_START),
             (COLLECTOR_WINDOWS_PROCESS, PAYLOAD_PROCESS_EXIT),
+            (COLLECTOR_WINDOWS_EVENTLOG, PAYLOAD_EVENT_LOG_RECORD),
         }
 
 
