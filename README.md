@@ -52,7 +52,7 @@ CLI `chronoscope …`  и  страница http://127.0.0.1:7342/ui/
 |---|---|
 | Структура, документация, ADR | готово |
 | JSON-схемы контракта и фикстуры | готово |
-| **Chronoscope Core**: приём, нормализация (оба источника), хранение, API | **готово**, 374 теста |
+| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 352 теста |
 | **Chronoscope Agent**: коллекторы (`windows.process`, `windows.eventlog`) и доставка в Core | **готово**, 137 тестов. Ограничение: полнота наблюдения не гарантирована — [`agent/README.md`](agent/README.md) |
 | CLI и локальная страница — 0.0.2 «See» (§77) | готово: `uv run chronoscope …` и http://127.0.0.1:7342/ui/ |
 | Экземпляр процесса — 0.0.3 «Identify» (§77.1) | **готово**: `GET /api/v1/processes/{id}`, `chronoscope process <id>` и переход из `actor`/`subject` на странице |
