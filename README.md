@@ -50,8 +50,8 @@ Windows
 |---|---|
 | Структура, документация, ADR | готово |
 | JSON-схемы контракта и фикстуры | готово |
-| **Chronoscope Core**: приём, нормализация (оба источника), хранение, API | **готово**, 386 тестов |
-| **Chronoscope Agent**: коллекторы (`windows.process`, `windows.eventlog`) и доставка в Core | **готово**, 140 тестов. Ограничение: полнота наблюдения не гарантирована — [`agent/README.md`](agent/README.md) |
+| **Chronoscope Core**: приём, нормализация, хранение, API | **готово**, 352 теста |
+| **Chronoscope Agent**: коллекторы (`windows.process`, `windows.eventlog`) и доставка в Core | **готово**, 137 тестов. Ограничение: полнота наблюдения не гарантирована — [`agent/README.md`](agent/README.md) |
 | CLI и локальная страница — 0.0.2 «See» (§77) | готово: `uv run chronoscope …` и http://127.0.0.1:7342/ui/ |
 | Экземпляр процесса — 0.0.3 «Identify» (§77.1) | **готово**: `GET /api/v1/processes/{id}`, `chronoscope process <id>` и переход из `actor`/`subject` на странице |
 | Второй источник — 0.0.4 «Observe» (§77.2) | **готово**: `windows.eventlog` подпиской на журнал, `system.event` в Core, оба источника в одной истории через существующий фильтр `source` |
@@ -205,10 +205,10 @@ pwsh scripts/test.ps1    # тесты Core и Agent одной командой 
 
 ```powershell
 cd core
-uv run pytest        # 386 тестов: домен, хранилище, нормализаторы обоих источников, контракт, правила слоёв, приём, индексы, экземпляр процесса, CLI, страница, скрипты, интеграция
+uv run pytest        # 374 теста: домен, хранилище, нормализаторы обоих источников, контракт, правила слоёв, приём, индексы, экземпляр процесса, CLI, страница, скрипты, интеграция
 
 cd ../agent
-dotnet test Chronoscope.Agent.sln   # 140 тестов: ULID, контракт, конфигурация, буфер, отправка, маппинг процессов, коллектор журнала, приватность payload, изоляция отказов
+dotnet test Chronoscope.Agent.sln   # 137 тестов: ULID, контракт, конфигурация, буфер, отправка, маппинг процессов, коллектор журнала, приватность payload, изоляция отказов
 ```
 
 Оба набора прогоняются в CI на каждый pull request. Правила участия описаны в [`CONTRIBUTING.md`](CONTRIBUTING.md), политика безопасности — в [`SECURITY.md`](SECURITY.md), процесс разработки — в [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md), команды разработки Core — в [`core/README.md`](core/README.md), Agent — в [`agent/README.md`](agent/README.md).
