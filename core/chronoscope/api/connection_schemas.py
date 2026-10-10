@@ -37,6 +37,8 @@ class RelationshipOut(ConnectionOut):
     resolution: Resolution
     reason: str
     evidence: tuple[EventId, ...]
+    evidence_count: int
+    evidence_truncated: bool
 
 
 class ConnectedProcessOut(ConnectionOut):

@@ -1,6 +1,6 @@
 """Conservative parent resolution from immutable lifecycle observations (ADR-0017)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Sequence
 
@@ -12,6 +12,7 @@ from chronoscope.domain.timestamps import parse_utc
 Resolution = Literal["resolved", "unresolved", "conflicting", "insufficient_observation"]
 ProcessKey = tuple[str, str, int]
 LIFECYCLE_TYPES = ("process.started", "process.exited")
+MAX_EVIDENCE_REFERENCES = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +28,7 @@ class ProcessObservation:
     actor_ids: tuple[str, ...]
     evidence: tuple[str, ...]
     problems: tuple[str, ...] = ()
+    observed_keys: tuple[ProcessKey, ...] = ()
 
     def key(self, pid: int | None = None) -> ProcessKey | None:
         value = self.pid if pid is None else pid
@@ -44,6 +46,14 @@ class ProcessRelationship:
     reason: str
     evidence: tuple[str, ...]
     relationship_type: Literal["parent_of"] = "parent_of"
+    evidence_count: int = field(init=False)
+    evidence_truncated: bool = field(init=False)
+
+    def __post_init__(self):
+        references = tuple(sorted(set(self.evidence)))
+        object.__setattr__(self, "evidence_count", len(references))
+        object.__setattr__(self, "evidence_truncated", len(references) > MAX_EVIDENCE_REFERENCES)
+        object.__setattr__(self, "evidence", references[:MAX_EVIDENCE_REFERENCES])
 
 
 def observe_process(instance_id: str, events: Sequence[Event]) -> ProcessObservation:
@@ -57,6 +67,7 @@ def observe_process(instance_id: str, events: Sequence[Event]) -> ProcessObserva
     starts: set[datetime] = set()
     exits = {e.timestamp for e in rows if e.type == "process.exited"}
     problems: set[str] = set()
+    observed_keys: set[ProcessKey] = set()
     for event in rows:
         if not event.subject or event.subject.type != "process" or event.subject.id != instance_id:
             problems.add("invalid_subject")
@@ -67,6 +78,8 @@ def observe_process(instance_id: str, events: Sequence[Event]) -> ProcessObserva
                     problems.add("invalid_" + field)
                 else:
                     values.add(value)
+                    if field == "pid" and event.boot_id:
+                        observed_keys.add((event.host_id, event.boot_id, value))
         if event.type == "process.started":
             starts.add(event.timestamp)
         raw = event.attributes.get("process_started_at")
@@ -103,6 +116,7 @@ def observe_process(instance_id: str, events: Sequence[Event]) -> ProcessObserva
         host_id=host, boot_id=boot, pid=pid, started_at=start, exited_at=end,
         parent_pids=tuple(sorted(parents)), actor_ids=tuple(sorted(actors)),
         evidence=tuple(e.id for e in rows), problems=tuple(sorted(problems)),
+        observed_keys=tuple(sorted(observed_keys)),
     )
 
 
@@ -118,7 +132,7 @@ def resolve_parent(child: ProcessObservation, candidates: Sequence[ProcessObserv
         return result("conflicting", child.problems[0])
     if not child.host_id or not child.boot_id or child.started_at is None or parent_pid is None:
         return result("insufficient_observation", "missing_identity_or_parent_pid")
-    relevant = [p for p in candidates if p.key() == child.key(parent_pid)]
+    relevant = [p for p in candidates if p.key() == child.key(parent_pid) or child.key(parent_pid) in p.observed_keys]
     possible: list[ProcessObservation] = []
     for parent in relevant:
         evidence.update(parent.evidence)
