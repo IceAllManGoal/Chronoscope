@@ -120,6 +120,73 @@ def test_dangling_actor_and_self_parent():
     assert resolve_parent(self_child, [self_child]).reason == "self_parent"
 
 
+@pytest.mark.parametrize("field,value", [("pid", 9), ("host_id", "host_01K5R8Z9M4Q7T2V6X1B3D5F7H8"),
+                                         ("boot_id", "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HB")])
+def test_damaged_candidate_cannot_disappear_behind_a_valid_candidate(field, value):
+    first = lifecycle(1)
+    damaged = lifecycle(1, exit_second=5)
+    if field == "pid":
+        damaged = replace(damaged, attributes={**damaged.attributes, "pid": value})
+    else:
+        damaged = replace(damaged, **{field: value})
+    valid = lifecycle(1, 6)
+    child = lifecycle(2, 10, 1)
+    result = resolve_parent(observation(child), [observation(first, damaged), observation(valid)])
+    assert result.resolution == "conflicting"
+    assert result.parent_instance_id is None
+
+
+def test_limits_never_resolve_from_partial_candidate_evidence(event_repository, monkeypatch):
+    from chronoscope.application.queries import process_connections as queries
+    parent, reused, child = lifecycle(1), lifecycle(1, 5), lifecycle(2, 10, 1)
+    put(event_repository, parent, reused, child)
+    monkeypatch.setattr(queries, "MAX_EVIDENCE", 2)
+    result = GetProcessRelations(event_repository).execute(child.subject.id)
+    assert result.truncated and "evidence_limit" in result.reasons
+    assert result.parent.parent_instance_id is None
+    monkeypatch.setattr(queries, "MAX_EVIDENCE", 10000)
+    monkeypatch.setattr(queries, "MAX_CANDIDATES", 1)
+    result = GetProcessRelations(event_repository).execute(child.subject.id)
+    assert result.truncated and result.parent.reason == "evidence_limit"
+
+
+def test_invalid_process_reference_is_reported_without_a_fake_node(event_repository):
+    parent, child = lifecycle(1), lifecycle(2, 1, 1)
+    child = replace(child, subject=EntityRef("process", "file_01K5R8Z9M4Q7T2V6X1B3D5F7HA", "broken"))
+    put(event_repository, parent, child)
+    result = GetProcessTree(event_repository).execute(parent.subject.id)
+    assert len(result.nodes) == 1 and result.reasons == ("invalid_reference",)
+
+
+@pytest.mark.parametrize("host,boot", [("host_01K5R8Z9M4Q7T2V6X1B3D5F7H8", BOOT_ID),
+                                      (HOST_ID, "boot_01K5R8Z9M4Q7T2V6X1B3D5F7HB")])
+def test_ingest_lookup_never_crosses_identity_scope(event_repository, host, boot):
+    parent = lifecycle(1, host=host, boot=boot)
+    put(event_repository, parent)
+    assert event_repository.find_process_instance(host_id=HOST_ID, boot_id=BOOT_ID, pid=1,
+                                                  before=SOURCE_TIMESTAMP + timedelta(seconds=10)) is None
+
+
+def test_legacy_detail_does_not_hide_conflicting_parent_actors():
+    from chronoscope.application.queries.process_detail import build_process_detail
+    parent = lifecycle(1)
+    start = lifecycle(2, 10, 1, actor=parent.subject)
+    end = lifecycle(2, 10, 3, exit_second=20, actor=lifecycle(3).subject)
+    result = build_process_detail(start.subject.id, [start, end])
+    assert result.parent.id is None and result.parent.resolved is False and result.parent.pid is None
+
+
+def test_evidence_reference_limit_does_not_limit_reasoning():
+    parent = lifecycle(1)
+    rows = [lifecycle(2, 10, 1) for _ in range(40)]
+    result = resolve_parent(observation(*rows), [observation(parent)])
+    assert result.resolution == "resolved"
+    assert len(result.evidence) == 32 and result.evidence_count == 41 and result.evidence_truncated
+    rows.append(lifecycle(2, 10, 3, exit_second=20))
+    result = resolve_parent(observation(*rows), [observation(parent)])
+    assert result.resolution == "conflicting" and result.evidence_count == 41
+
+
 def test_chain_tree_limits_and_stable_order(event_repository, migrated_engine):
     root, a, b, leaf = lifecycle(1), lifecycle(2, 1, 1), lifecycle(3, 1, 1), lifecycle(4, 2, 2)
     put(event_repository, leaf, b, a, root)
@@ -155,7 +222,16 @@ def test_cycles_terminate_without_duplicate_nodes(event_repository):
 def test_wide_tree_has_bounded_queries(event_repository, migrated_engine):
     root = lifecycle(1)
     put(event_repository, root, *(lifecycle(i, 1, 1) for i in range(2, 242)))
-    tree = GetProcessTree(event_repository).execute(root.subject.id)
+    queries = []
+    def count(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().startswith("SELECT"):
+            queries.append(statement)
+    sql_event.listen(migrated_engine, "before_cursor_execute", count)
+    try:
+        tree = GetProcessTree(event_repository).execute(root.subject.id)
+    finally:
+        sql_event.remove(migrated_engine, "before_cursor_execute", count)
+    assert len(queries) == 4
     assert len(tree.nodes) == 200
     assert tree.reasons == ("node_limit",)
     assert len({x.process.id for x in tree.nodes}) == 200
@@ -232,6 +308,7 @@ def test_http_ingest_relations_restart_and_duplicate_delivery(migrated_database)
             assert client.get(f"/api/v1/processes/{lifecycle(99).subject.id}/{suffix}").status_code == 404
         assert client.get(f"/api/v1/processes/{parent.subject.id}/tree?depth=6").status_code == 422
         assert client.get(f"/api/v1/processes/{parent.subject.id}/relations?limit=201").status_code == 422
+        assert client.get("/api/v1/events?entity_id=invalid").status_code == 422
         assert client.get(f"/api/v1/processes/{parent.subject.id}/tree").json()["nodes"][1]["process"]["id"] == child.subject.id
     with TestClient(create_app(migrated_database)) as client:
         assert client.get(f"/api/v1/processes/{child.subject.id}/relations").json() == body

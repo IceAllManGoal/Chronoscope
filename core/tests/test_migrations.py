@@ -27,6 +27,15 @@ def alembic_config() -> Config:
 
 
 class TestMigrations:
+    def test_connect_upgrade_and_downgrade_preserve_history(self, event_repository, migrated_engine):
+        from tests.factories import make_event
+        saved = make_event(raw_event_id=None)
+        event_repository.insert(saved, ingested_at=saved.timestamp)
+        command.downgrade(alembic_config(), "0002")
+        assert event_repository.get(saved.id) == saved
+        command.upgrade(alembic_config(), "head")
+        assert event_repository.get(saved.id) == saved
+
     def test_upgrade_creates_expected_tables(self, migrated_engine) -> None:  # noqa: ANN001
         inspector = sa.inspect(migrated_engine)
         assert set(inspector.get_table_names()) >= {"raw_events", "events", "alembic_version"}

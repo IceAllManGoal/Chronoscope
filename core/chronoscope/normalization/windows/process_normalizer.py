@@ -128,6 +128,9 @@ def _resolve_parent(
     parent_pid = attributes.get("parent_pid")
     if parent_pid is None:
         return None
+    if parent_pid == attributes.get("pid"):
+        attributes[ATTRIBUTE_PARENT_RESOLVED] = False
+        return None
 
     # Граница поиска — время старта потомка, а не время текущего события.
     #

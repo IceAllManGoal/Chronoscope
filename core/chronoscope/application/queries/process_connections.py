@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from chronoscope.application.ports import EventRepositoryPort
 from chronoscope.domain.errors import HistoryLimitExceededError, InvalidInputError
+from chronoscope.domain.ids import is_prefixed_id
 from chronoscope.domain.process_relationships import (
     ProcessObservation, ProcessRelationship, observe_process, resolve_parent,
 )
@@ -53,6 +54,9 @@ class ProcessTree:
 class EvidenceLimit(Exception):
     """Internal control flow: partial candidate evidence must never resolve an edge."""
 
+    def __init__(self, reason: str = "evidence_limit"):
+        super().__init__(reason)
+
 
 def _order(process: ProcessObservation) -> tuple[datetime, str]:
     return process.started_at or datetime.max.replace(tzinfo=UTC), process.id
@@ -99,13 +103,20 @@ class _Reader:
         ids = self.repository.find_process_ids(keys, field=field, limit=MAX_CANDIDATES + 1)
         if len(ids) > MAX_CANDIDATES:
             raise EvidenceLimit
+        if any(not is_prefixed_id(id_, "proc") for id_ in ids):
+            raise EvidenceLimit("invalid_reference")
         return self.load(ids)
 
     def parents(self, children: list[ProcessObservation]) -> list[ProcessRelationship]:
         candidates = self.find(
             (child.key(pid) for child in children for pid in child.parent_pids), "pid",
         )
-        return [resolve_parent(child, candidates) for child in children]
+        by_key = {}
+        for candidate in candidates:
+            for key in candidate.observed_keys:
+                by_key.setdefault(key, []).append(candidate)
+        return [resolve_parent(child, by_key.get(child.key(child.parent_pids[0]), [])
+                               if len(child.parent_pids) == 1 else []) for child in children]
 
     def children(self, parents: list[ProcessObservation]) -> list[ConnectedProcess]:
         children = self.find((p.key() for p in parents), "parent_pid")
@@ -131,14 +142,14 @@ class GetProcessRelations:
             children: list[ConnectedProcess] = []
             try:
                 parent = reader.parents([root])[0]
-            except EvidenceLimit:
-                reasons.add("evidence_limit")
+            except EvidenceLimit as exc:
+                reasons.add(str(exc))
                 parent = ProcessRelationship(root.id, None, root.parent_pids[0] if len(root.parent_pids) == 1 else None,
-                                             "unresolved", "evidence_limit", root.evidence)
+                                             "unresolved", str(exc), root.evidence)
             try:
                 children = reader.children([root])
-            except EvidenceLimit:
-                reasons.add("evidence_limit")
+            except EvidenceLimit as exc:
+                reasons.add(str(exc))
             # A reused PID may discover children belonging to a different instance.
             children = [c for c in children if c.relationship.parent_instance_id in (None, root.id)]
             if len(children) > limit:
@@ -173,8 +184,8 @@ class GetProcessTree:
             for level in range(depth + 1):
                 try:
                     children = reader.children(frontier)
-                except EvidenceLimit:
-                    reasons.add("evidence_limit")
+                except EvidenceLimit as exc:
+                    reasons.add(str(exc))
                     break
                 parent_ids = {p.id for p in frontier}
                 following = []
