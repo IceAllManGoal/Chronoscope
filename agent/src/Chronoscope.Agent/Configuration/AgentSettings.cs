@@ -93,6 +93,45 @@ public sealed record PrivacySettings
     public IReadOnlyList<string> RedactCommandLinePatterns { get; init; } = [];
 }
 
+/// <summary>Настройки коллектора журнала Windows (§8.4, §37, §77.2).</summary>
+public sealed record EventLogCollectorSettings
+{
+    /// <summary>Каналы, которые поддерживает 0.0.4.</summary>
+    public static readonly IReadOnlyList<string> SupportedChannels = ["System", "Application"];
+
+    /// <summary>
+    /// Канал, который в 0.0.4 не поддерживается осознанно (§77.2, пункт 4): чтение
+    /// Security требует прав администратора, а §67 запрещает запускать весь
+    /// продукт от администратора ради одного источника.
+    /// </summary>
+    public const string SecurityChannel = "Security";
+
+    /// <summary>Канал по умолчанию: без ключа <c>channels</c> наблюдается только он.</summary>
+    public static readonly IReadOnlyList<string> DefaultChannels = ["System"];
+
+    /// <summary>
+    /// Включён ли коллектор. По умолчанию <b>выключен</b>.
+    ///
+    /// §6.2 объявляет privacy by default, и источник, начинающий собирать данные
+    /// о системе без спроса, этому противоречит. Включение — явное действие
+    /// пользователя в конфигурации (§77.2, пункт 5).
+    /// </summary>
+    public bool Enabled { get; init; }
+
+    /// <summary>Каналы в канонической форме: <c>System</c>, <c>Application</c>.</summary>
+    public IReadOnlyList<string> Channels { get; init; } = DefaultChannels;
+
+    /// <summary>
+    /// Читать отформатированное сообщение записи. По умолчанию <b>выключено</b>.
+    ///
+    /// Сообщение содержит пути, имена пользователей, аргументы и иногда секреты;
+    /// §37 относит такое к уровню Standard, а Minimal его не включает. Пока флаг
+    /// выключен, сообщение не читается и не форматируется вовсе — оно не попадает
+    /// даже в память Agent.
+    /// </summary>
+    public bool CaptureMessage { get; init; }
+}
+
 /// <summary>Полная конфигурация Agent.</summary>
 public sealed record AgentSettings
 {
@@ -101,6 +140,9 @@ public sealed record AgentSettings
     public DeliverySettings Delivery { get; init; } = new();
 
     public ProcessCollectorSettings Process { get; init; } = new();
+
+    /// <summary>Коллектор журнала Windows. Выключен, пока его не включат явно.</summary>
+    public EventLogCollectorSettings EventLog { get; init; } = new();
 
     public PrivacySettings Privacy { get; init; } = new();
 

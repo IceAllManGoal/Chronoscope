@@ -239,4 +239,177 @@ public class SettingsLoaderTests
 
         Assert.Contains("не найден", exception.Message, StringComparison.Ordinal);
     }
+
+    // ── Коллектор журнала Windows (§77.2, пункты 3–5) ───────────────────
+
+    /// <summary>
+    /// Новый источник выключен, пока его не включили явно: §6.2 объявляет privacy
+    /// by default, и источник, начинающий собирать данные о системе без спроса,
+    /// этому противоречит. Канал по умолчанию — System, но он не наблюдается, пока
+    /// не сказано <c>enabled = true</c>.
+    /// </summary>
+    [Fact]
+    public void EventLogCollectorIsDisabledByDefault()
+    {
+        var settings = SettingsLoader.Parse("""
+            [collectors.process]
+            enabled = true
+            """);
+
+        Assert.False(settings.EventLog.Enabled);
+        Assert.False(settings.EventLog.CaptureMessage);
+        Assert.Equal(["System"], settings.EventLog.Channels);
+    }
+
+    [Fact]
+    public void ReadsEventLogSection()
+    {
+        var settings = SettingsLoader.Parse("""
+            [collectors.event_log]
+            enabled = true
+            channels = ["System", "Application"]
+            capture_message = false
+            """);
+
+        Assert.True(settings.EventLog.Enabled);
+        Assert.False(settings.EventLog.CaptureMessage);
+        Assert.Equal(["System", "Application"], settings.EventLog.Channels);
+    }
+
+    /// <summary>Имена каналов Windows не различают регистр, и хранить их в разном регистре незачем.</summary>
+    [Fact]
+    public void CanonicalizesChannelNames()
+    {
+        var settings = SettingsLoader.Parse("""
+            [collectors.event_log]
+            channels = ["system", "APPLICATION"]
+            """);
+
+        Assert.Equal(["System", "Application"], settings.EventLog.Channels);
+    }
+
+    /// <summary>
+    /// Security не поддерживается осознанно (§77.2, пункт 4): его чтение требует
+    /// прав администратора, а §67 запрещает запускать весь продукт от
+    /// администратора ради одного источника. Отказ обязан быть объяснён — иначе
+    /// он выглядит как опечатка в имени канала.
+    /// </summary>
+    [Fact]
+    public void RejectsSecurityChannelWithExplanation()
+    {
+        var exception = Assert.Throws<ConfigurationException>(() =>
+            SettingsLoader.Parse("""
+                [collectors.event_log]
+                enabled = true
+                channels = ["Security"]
+                """));
+
+        Assert.Contains("Security", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("не поддерживается", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("администратора", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsUnknownChannel()
+    {
+        var exception = Assert.Throws<ConfigurationException>(() =>
+            SettingsLoader.Parse("""
+                [collectors.event_log]
+                channels = ["Sytem"]
+                """));
+
+        Assert.Contains("Sytem", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("System", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Application", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Две подписки на один журнал дали бы каждую запись дважды, и заметить это по
+    /// данным было бы нельзя: история выглядела бы просто полнее.
+    /// </summary>
+    [Fact]
+    public void RejectsDuplicateChannels()
+    {
+        var exception = Assert.Throws<ConfigurationException>(() =>
+            SettingsLoader.Parse("""
+                [collectors.event_log]
+                channels = ["System", "system"]
+                """));
+
+        Assert.Contains("дважды", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Пустой список не означает ничего определённого, а тихая подстановка System
+    /// скрыла бы, что настройка не применена.
+    /// </summary>
+    [Fact]
+    public void RejectsEmptyChannelList()
+    {
+        var exception = Assert.Throws<ConfigurationException>(() =>
+            SettingsLoader.Parse("""
+                [collectors.event_log]
+                channels = []
+                """));
+
+        Assert.Contains("ни одного канала", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Историческое чтение не поддерживается: 0.0.4 наблюдает только за новыми
+    /// записями (§77.2, пункт 3). Значение <c>false</c> при этом принимается — оно
+    /// совпадает с поведением по умолчанию.
+    /// </summary>
+    [Fact]
+    public void RejectsReadExistingTrue()
+    {
+        var exception = Assert.Throws<ConfigurationException>(() =>
+            SettingsLoader.Parse("""
+                [collectors.event_log]
+                enabled = true
+                read_existing = true
+                """));
+
+        Assert.Contains("read_existing", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("не поддерживается", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcceptsReadExistingFalse()
+    {
+        var settings = SettingsLoader.Parse("""
+            [collectors.event_log]
+            read_existing = false
+            enabled = true
+            """);
+
+        Assert.True(settings.EventLog.Enabled);
+    }
+
+    [Fact]
+    public void RejectsUnknownKeyInEventLogSection()
+    {
+        var exception = Assert.Throws<ConfigurationException>(() =>
+            SettingsLoader.Parse("""
+                [collectors.event_log]
+                chanels = ["System"]
+                """));
+
+        Assert.Contains("chanels", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("неизвестные ключи", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("enabled = \"да\"")]
+    [InlineData("capture_message = 1")]
+    [InlineData("read_existing = \"нет\"")]
+    [InlineData("channels = \"System\"")]
+    [InlineData("channels = [1, 2]")]
+    public void RejectsWrongTypesInEventLogSection(string line)
+    {
+        Assert.Throws<ConfigurationException>(() => SettingsLoader.Parse($"""
+            [collectors.event_log]
+            {line}
+            """));
+    }
 }

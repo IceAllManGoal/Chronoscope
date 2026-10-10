@@ -1,6 +1,8 @@
 using Chronoscope.Agent.Abstractions;
 using Chronoscope.Agent.Collectors;
+using Chronoscope.Agent.Configuration;
 using Chronoscope.Agent.Contract;
+using Chronoscope.Agent.Identity;
 using Chronoscope.Agent.Logging;
 using Chronoscope.Agent.Transport;
 
@@ -15,8 +17,28 @@ namespace Chronoscope.Agent.Tests;
 /// публиковать события, падать объявленным отказом, падать неизвестным
 /// исключением или прекращать наблюдение молча.
 /// </summary>
-public class CollectorSupervisorTests
+public class CollectorSupervisorTests : IDisposable
 {
+    /// <summary>Каталог для <c>host_id</c>: настоящим коллекторам ниже нужна идентичность.</summary>
+    private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), $"chronoscope-supervisor-{Guid.NewGuid():N}");
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_dataDirectory))
+        {
+            Directory.Delete(_dataDirectory, recursive: true);
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    private sealed class FixedBootSession : IBootSessionProvider
+    {
+        public DateTimeOffset? GetBootTimeUtc() => DateTimeOffset.Parse("2026-10-09T05:00:00Z");
+    }
+
+    private AgentIdentity Identity() => AgentIdentity.Resolve(_dataDirectory, new FixedBootSession());
+
     [Fact]
     public async Task PublishesEventsFromSeveralCollectorsIntoOneSink()
     {
@@ -236,6 +258,76 @@ public class CollectorSupervisorTests
         Assert.Contains("collector_failed", written);
         Assert.Contains("collector_crashed", written);
         Assert.Contains("InvalidOperationException", written);
+    }
+
+    /// <summary>
+    /// Два настоящих коллектора на одном приёмнике: отказ журнала не уносит
+    /// события процессов.
+    ///
+    /// Изоляция отказов покрыта выше подставными коллекторами; здесь проверяется,
+    /// что она работает для настоящих классов — с маппингом, контрактом и
+    /// идентичностью, — и что буфер у них действительно общий.
+    /// </summary>
+    [Fact]
+    public async Task EventLogFailureDoesNotStopProcessCollector()
+    {
+        var buffer = new BoundedEventBuffer(capacity: 16);
+        using var cancellation = new CancellationTokenSource();
+
+        var settings = SettingsLoader.Defaults();
+        var identity = Identity();
+
+        var processSource = new FakeProcessObservationSource(async (onObservation, token) =>
+        {
+            onObservation(ProcessStart(1));
+            await Task.Delay(20, token);
+            onObservation(ProcessStart(2));
+            await Task.Delay(Timeout.Infinite, token);
+        });
+
+        var eventLogSource = new FailingEventLogObservationSource("канал System недоступен: журнал не найден");
+
+        var supervisor = new CollectorSupervisor(
+            [
+                EventLogCollector.Create(eventLogSource, identity, "0.0.4"),
+                ProcessCollector.Create(processSource, settings, identity, "0.0.4"),
+            ],
+            buffer);
+
+        var run = supervisor.RunAsync(cancellation.Token);
+
+        await WaitUntil(() => buffer.AcceptedCount == 2, "события процессов дошли до общего буфера");
+
+        var statuses = supervisor.Statuses;
+        Assert.Equal(CollectorOutcome.Failed, statuses[0].Outcome);
+        Assert.Contains("канал System", statuses[0].Detail, StringComparison.Ordinal);
+        Assert.Equal(CollectorOutcome.Observing, statuses[1].Outcome);
+        Assert.Equal(1, supervisor.LostCount);
+        Assert.False(run.IsCompleted);
+
+        cancellation.Cancel();
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    private static ProcessObservation ProcessStart(int index) => new()
+    {
+        ProcessId = 4000 + index,
+        ParentProcessId = 4312,
+        Name = "notepad.exe",
+        StartedAt = DateTimeOffset.Parse("2026-10-09T10:42:15.220Z"),
+    };
+
+    private sealed class FakeProcessObservationSource(Func<Action<ProcessObservation>, CancellationToken, Task> watch)
+        : IProcessObservationSource
+    {
+        public Task WatchAsync(Action<ProcessObservation> onObservation, CancellationToken cancellationToken)
+            => watch(onObservation, cancellationToken);
+    }
+
+    private sealed class FailingEventLogObservationSource(string message) : IEventLogObservationSource
+    {
+        public Task WatchAsync(Action<EventLogObservation> onObservation, CancellationToken cancellationToken)
+            => Task.FromException(new CollectorException(message));
     }
 
     private static async Task WaitUntil(Func<bool> condition, string what)
