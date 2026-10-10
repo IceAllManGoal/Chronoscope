@@ -28,6 +28,7 @@ public static class SettingsLoader
     private static readonly string[] CoreKeys = ["host", "port", "log_level", "max_request_bytes"];
     private static readonly string[] AgentKeys = ["batch_size", "flush_interval_ms", "buffer_capacity", "request_timeout_ms", "data_directory"];
     private static readonly string[] ProcessKeys = ["enabled", "capture_path", "capture_command_line", "capture_user"];
+    private static readonly string[] EventLogKeys = ["enabled", "channels", "capture_message", "read_existing"];
     private static readonly string[] PrivacyKeys = ["redact_command_line_patterns"];
 
     /// <summary>Определить путь к конфигурации: явный аргумент, затем переменная окружения, затем файл в текущем каталоге.</summary>
@@ -108,6 +109,9 @@ public static class SettingsLoader
         var process = Section(root, "collectors.process", sourcePath);
         RejectUnknownKeys(process, "collectors.process", ProcessKeys, sourcePath);
 
+        var eventLog = Section(root, "collectors.event_log", sourcePath);
+        RejectUnknownKeys(eventLog, "collectors.event_log", EventLogKeys, sourcePath);
+
         var privacy = Section(root, "privacy", sourcePath);
         RejectUnknownKeys(privacy, "privacy", PrivacyKeys, sourcePath);
 
@@ -156,6 +160,8 @@ public static class SettingsLoader
             CaptureUser = BoolValue(process, "capture_user", false, sourcePath),
         };
 
+        var eventLogSettings = BuildEventLogSettings(eventLog, sourcePath);
+
         var patterns = StringArrayValue(privacy, "redact_command_line_patterns", sourcePath);
         foreach (var pattern in patterns)
         {
@@ -176,8 +182,80 @@ public static class SettingsLoader
             Core = new CoreEndpoint { Host = host, Port = port },
             Delivery = delivery,
             Process = processSettings,
+            EventLog = eventLogSettings,
             Privacy = new PrivacySettings { RedactCommandLinePatterns = patterns },
             DataDirectory = StringValue(agent, "data_directory", DefaultDataDirectory(), sourcePath),
+        };
+    }
+
+    /// <summary>
+    /// Настройки коллектора журнала (§77.2, пункты 3–5).
+    ///
+    /// Проверки здесь строгие и с объяснением причины: неподдерживаемый канал или
+    /// историческое чтение обязаны быть отвергнуты при загрузке конфигурации, а не
+    /// обнаружиться позже как «в журнале почему-то нет событий». Отказ с
+    /// объяснением — единственный способ отличить неподдерживаемую настройку от
+    /// неработающего источника.
+    /// </summary>
+    private static EventLogCollectorSettings BuildEventLogSettings(TomlTable section, string? sourcePath)
+    {
+        IReadOnlyList<string> requested = section.ContainsKey("channels")
+            ? StringArrayValue(section, "channels", sourcePath)
+            : EventLogCollectorSettings.DefaultChannels;
+
+        if (requested.Count == 0)
+        {
+            // Явно пустой список не означает ни «все каналы», ни «никакие»:
+            // догадываться за пользователя здесь не о чем, а тихая подстановка
+            // System скрыла бы, что настройка не применена.
+            throw new ConfigurationException(
+                $"{Where(sourcePath)}collectors.event_log.channels = [] не задаёт ни одного канала. "
+                + $"Убери ключ, чтобы наблюдать канал по умолчанию ({string.Join(", ", EventLogCollectorSettings.DefaultChannels)}), "
+                + $"или перечисли поддерживаемые: {string.Join(", ", EventLogCollectorSettings.SupportedChannels)}");
+        }
+
+        var channels = new List<string>(requested.Count);
+        foreach (var channel in requested)
+        {
+            var canonical = EventLogCollectorSettings.SupportedChannels.FirstOrDefault(
+                supported => string.Equals(supported, channel, StringComparison.OrdinalIgnoreCase));
+
+            if (canonical is null)
+            {
+                var reason = string.Equals(channel, EventLogCollectorSettings.SecurityChannel, StringComparison.OrdinalIgnoreCase)
+                    ? "Канал Security в 0.0.4 не поддерживается: чтение Security требует прав администратора, "
+                      + "а весь продукт от администратора не запускается (§67)."
+                    : $"Поддерживаются каналы: {string.Join(", ", EventLogCollectorSettings.SupportedChannels)}.";
+
+                throw new ConfigurationException(
+                    $"{Where(sourcePath)}collectors.event_log.channels: канал '{channel}' не поддерживается. {reason}");
+            }
+
+            if (channels.Contains(canonical, StringComparer.Ordinal))
+            {
+                throw new ConfigurationException(
+                    $"{Where(sourcePath)}collectors.event_log.channels: канал '{canonical}' указан дважды. "
+                    + "Две подписки на один журнал удвоили бы каждую запись в истории, и заметить это по данным было бы нельзя.");
+            }
+
+            channels.Add(canonical);
+        }
+
+        // Ключ распознаётся только затем, чтобы отказ был объяснён: false совпадает
+        // с поведением по умолчанию, а true не поддерживается (§77.2, пункт 3).
+        if (BoolValue(section, "read_existing", false, sourcePath))
+        {
+            throw new ConfigurationException(
+                $"{Where(sourcePath)}collectors.event_log.read_existing = true не поддерживается: 0.0.4 наблюдает только "
+                + "за новыми записями (§77.2, пункт 3). Уже накопленный журнал не импортируется — иначе включение "
+                + "источника означало бы загрузку всей его истории в Chronoscope.");
+        }
+
+        return new EventLogCollectorSettings
+        {
+            Enabled = BoolValue(section, "enabled", false, sourcePath),
+            Channels = channels,
+            CaptureMessage = BoolValue(section, "capture_message", false, sourcePath),
         };
     }
 

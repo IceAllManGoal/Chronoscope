@@ -56,7 +56,13 @@ JsonLog.Info(
     ("buffer_capacity", settings.Delivery.BufferCapacity),
     ("capture_path", settings.Process.CapturePath),
     ("capture_command_line", settings.Process.CaptureCommandLine),
-    ("capture_user", settings.Process.CaptureUser));
+    ("capture_user", settings.Process.CaptureUser),
+    // Видно и то, что журнал выключен, и то, читается ли сообщение: второе
+    // относится к приватности, и о нём лучше знать из лога запуска, чем
+    // выяснять постфактум по содержимому истории.
+    ("event_log_enabled", settings.EventLog.Enabled),
+    ("event_log_channels", string.Join(", ", settings.EventLog.Channels)),
+    ("event_log_capture_message", settings.EventLog.CaptureMessage));
 
 var senderTask = sender.RunAsync(shutdown.Token);
 
@@ -79,8 +85,18 @@ else
         ("collector", ProcessCollector.CollectorName));
 }
 
-// Здесь же появится windows.eventlog (§77.2), и ему не понадобится ни свой
-// буфер, ни свой транспорт: приёмник у коллекторов общий.
+if (settings.EventLog.Enabled)
+{
+    var source = new WindowsEventLogObservationSource(settings.EventLog);
+    collectors.Add(EventLogCollector.Create(source, identity, AgentInfo.Version));
+}
+else
+{
+    JsonLog.Warning(
+        "collector_disabled",
+        "коллектор журнала Windows выключен: события журнала не собираются",
+        ("collector", EventLogCollector.CollectorName));
+}
 
 var supervisor = new CollectorSupervisor(collectors, buffer);
 
