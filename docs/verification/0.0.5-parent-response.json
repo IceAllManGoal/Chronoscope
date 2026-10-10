@@ -1,0 +1,16 @@
+{
+  "child_instance_id": "proc_01M4JSPGKDF86DY3NC2KYVV5R1",
+  "parent_instance_id": "proc_01M4JSPCFDJ44MAJB129BMMV1J",
+  "parent_pid": 28756,
+  "relationship_type": "parent_of",
+  "resolution": "resolved",
+  "reason": "unique_compatible_observation",
+  "evidence": [
+    "evt_01M4JSPDMJ6A99X01C0TGEPPQ2",
+    "evt_01M4JSPHKC8Q2JQ361B2PJ7RS4",
+    "evt_01M4JSQ0MMKQXJY0AZE2VX8DYY",
+    "evt_01M4JSQ2M7GT2DKJ69G3ZZAMZX"
+  ],
+  "evidence_count": 4,
+  "evidence_truncated": false
+}

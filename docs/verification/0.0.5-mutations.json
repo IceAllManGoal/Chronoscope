@@ -1,0 +1,37 @@
+[
+  {
+    "mutation": "PID without host/boot",
+    "detected": true,
+    "exit_code": 1
+  },
+  {
+    "mutation": "ignore parent exit",
+    "detected": true,
+    "exit_code": 1
+  },
+  {
+    "mutation": "ignore parent start",
+    "detected": true,
+    "exit_code": 1
+  },
+  {
+    "mutation": "hide conflicting evidence",
+    "detected": true,
+    "exit_code": 1
+  },
+  {
+    "mutation": "remove cycle guard",
+    "detected": true,
+    "exit_code": 1
+  },
+  {
+    "mutation": "remove node bound",
+    "detected": true,
+    "exit_code": 1
+  },
+  {
+    "mutation": "temporal proximity becomes entity relationship",
+    "detected": true,
+    "exit_code": 1
+  }
+]

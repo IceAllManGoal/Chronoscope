@@ -1,5 +1,43 @@
 # Development
 
+## Проверка Connect 0.0.5
+
+Гейт версии — [§77.3](PROJECT_SPEC.md#773-definition-of-done-005-connect),
+зафиксированный результат — [отчёт](verification/0.0.5-connect.md).
+Из корня репозитория:
+
+```powershell
+uv sync --project core --all-groups --locked
+uv run --project core pytest core/tests
+dotnet build agent/Chronoscope.Agent.sln
+dotnet test agent/Chronoscope.Agent.sln --no-build
+node --check core/chronoscope/web/app.js
+Set-Location core
+uv run python ../scripts/benchmark-connect.py
+uv run python ../scripts/check-connect-mutations.py
+uv run python ../scripts/e2e-connect.py --keep-core --ui-fixtures
+```
+
+Mutation script временно меняет исходники и восстанавливает точные байты в
+finally; не запускать одновременно с тестами, Core или редактированием этих
+файлов. Ключ `--ui-fixtures` добавляет два **синтетических** события только в
+изолированную E2E-базу после проверки реального pipeline, для XSS/conflict UI.
+Без `--keep-core` сценарий останавливает свои процессы; с ним оставляет свой
+Core PID/URL в `data/connect-e2e-*/report.json` для проверки браузером.
+После проверки остановить именно этот PID. Пользовательская БД не используется.
+
+Браузерный протокол: открыть событие Enter → субъект → родитель → ребёнок;
+открыть дерево, depth 1 и 3; связанные события → событие → назад; убедиться,
+что исходные фильтры/страница сохранились. Проверить отсутствующего родителя,
+пустое дерево, конфликтную фикстуру и буквальный текст опасного имени без img
+или alert. Остановить тестовый Core, запросить данные и проверить сообщение
+об ошибке. Зафиксировать DOM/скриншоты и browser result отдельно от pipeline:
+script намеренно оставляет browser=PENDING.
+
+Если системный TEMP недоступен (наблюдалось на машине проверки), использовать
+свой каталог под `data`, задав TEMP/TMP только в процессе запуска, и
+`pytest --basetemp <свой-каталог>`. Не менять права системных каталогов.
+
 Как поднять Chronoscope, проверить изменение и выпустить версию. Правила вклада — в [CONTRIBUTING.md](../CONTRIBUTING.md); здесь то, что нужно знать про **процесс**, а не про то, как оформлять PR.
 
 Документ описывает фактическое состояние после 0.0.2. Если он разойдётся с фактом — правым считается факт: §76 требует, чтобы документация соответствовала реальной архитектуре.

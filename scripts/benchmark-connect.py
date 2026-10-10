@@ -61,11 +61,21 @@ def main():
                     conn.execute(events.insert(), rows)
                 ingest_ms = (time.perf_counter() - started) * 1000
                 repository = EventRepository(engine)
+                cursor = repository.list(EventQuery(entity_id=ids[5], limit=20)).next_cursor
+                assert cursor is not None
+                event_queries = {
+                    "related_events": EventQuery(entity_id=ids[5], limit=20),
+                    "related_next_page": EventQuery(entity_id=ids[5], limit=20, cursor=cursor),
+                    "related_time_range": EventQuery(entity_id=ids[5], limit=20,
+                                                     time_from=BASE + timedelta(seconds=50),
+                                                     time_to=BASE + timedelta(seconds=150)),
+                    "actor_events": EventQuery(actor_id=ids[5], limit=20),
+                }
                 operations = {
                     "relations": lambda: GetProcessRelations(repository).execute(ids[1]),
                     "tree_chain": lambda: GetProcessTree(repository).execute(ids[1]),
                     "tree_wide": lambda: GetProcessTree(repository).execute(ids[5]),
-                    "related_events": lambda: repository.list(EventQuery(entity_id=ids[5], limit=20)),
+                    **{name: (lambda q=query: repository.list(q)) for name, query in event_queries.items()},
                 }
                 measurements = {}
                 for name, operation in operations.items():
@@ -93,9 +103,10 @@ def main():
                     sql = str(statement.compile(engine, compile_kwargs={"literal_binds": True}))
                     with engine.connect() as conn:
                         plans[field] = [row[-1] for row in conn.execute(text("EXPLAIN QUERY PLAN " + sql))]
-                statement = build_list_statement(EventQuery(entity_id=ids[5], limit=20))
-                with engine.connect() as conn:
-                    plans["entity"] = [row[-1] for row in conn.execute(text("EXPLAIN QUERY PLAN " + str(statement.compile(engine, compile_kwargs={"literal_binds": True}))))]
+                for name, query in event_queries.items():
+                    statement = build_list_statement(query)
+                    with engine.connect() as conn:
+                        plans[name] = [row[-1] for row in conn.execute(text("EXPLAIN QUERY PLAN " + str(statement.compile(engine, compile_kwargs={"literal_binds": True}))))]
                 report["runs"].append({"events": count, "indexed": indexed, "insert_ms": round(ingest_ms, 3), "measurements": measurements, "plans": plans})
                 engine.dispose()
     print(json.dumps(report, indent=2))
