@@ -284,6 +284,67 @@ def test_entity_union_pagination_and_temporal_non_causality(event_repository):
     assert not event_repository.list(EventQuery(entity_id=root.subject.id, time_from=SOURCE_TIMESTAMP + timedelta(seconds=1))).events
 
 
+@pytest.mark.parametrize("case", ["empty", "conflicting", "wide", "cycle"])
+def test_http_connections_preserve_edge_case_semantics(event_repository, migrated_database, case):
+    root = lifecycle(1, 0, 2 if case == "cycle" else 99)
+    rows = [root]
+    if case == "conflicting":
+        rows.append(lifecycle(1, 0, 100, exit_second=2))
+    elif case == "wide":
+        rows.extend(lifecycle(pid, 1, 1) for pid in range(2, 242))
+    elif case == "cycle":
+        rows.append(lifecycle(2, 0, 1))
+    put(event_repository, *rows)
+    with TestClient(create_app(migrated_database)) as client:
+        path = f"/api/v1/processes/{root.subject.id}"
+        relations_response = client.get(path + "/relations?limit=2")
+        tree_response = client.get(path + "/tree?depth=5")
+        assert relations_response.status_code == tree_response.status_code == 200
+        relations, tree = relations_response.json(), tree_response.json()
+        assert relations["observation_complete"] is tree["observation_complete"] is False
+        assert len({node["process"]["id"] for node in tree["nodes"]}) == len(tree["nodes"])
+        if case == "conflicting":
+            assert relations["parent"]["resolution"] == "conflicting"
+            assert relations["parent"]["reason"] == "conflicting_parent_pids"
+            assert relations["parent_process"] is None
+            assert relations["parent"]["evidence_count"] == 2
+        elif case == "wide":
+            assert len(relations["children"]) == 2 and relations["reasons"] == ["children_limit"]
+            assert len(tree["nodes"]) == 200 and tree["reasons"] == ["node_limit"]
+        elif case == "cycle":
+            assert len(tree["nodes"]) == 2 and tree["reasons"] == ["cycle_detected"]
+        else:
+            assert relations["children"] == relations["unresolved_children"] == []
+            assert relations["parent_process"] is None
+            assert relations["parent"]["parent_pid"] == 99
+            assert len(tree["nodes"]) == 1 and not tree["truncated"]
+
+
+def test_http_entity_pages_keep_order_filters_and_dedup(event_repository, migrated_database):
+    root = lifecycle(1)
+    child = lifecycle(2, 0, 1, actor=root.subject)
+    both = replace(root, id=new_event_id(), actor=root.subject)
+    unrelated = make_event(id=new_event_id(), type="system.event", source="windows.eventlog",
+                           subject=None, actor=None, attributes={}, raw_event_id=None)
+    put(event_repository, root, child, both, unrelated)
+    with TestClient(create_app(migrated_database)) as client:
+        params = {"entity_id": root.subject.id, "limit": 1, "source": "windows.process",
+                  "from": format_utc(root.timestamp), "to": format_utc(root.timestamp)}
+        ids = []
+        for _ in range(4):
+            response = client.get("/api/v1/events", params=params)
+            assert response.status_code == 200
+            page = response.json()
+            ids.extend(event["id"] for event in page["events"])
+            if page["next_cursor"] is None:
+                break
+            params["cursor"] = page["next_cursor"]
+        assert ids == sorted([root.id, child.id, both.id], reverse=True)
+        assert len(set(ids)) == 3
+        assert client.get("/api/v1/events", params={"entity_id": root.subject.id,
+                                                  "type": "system.event"}).json()["events"] == []
+
+
 def test_http_ingest_relations_restart_and_duplicate_delivery(migrated_database):
     parent, child = lifecycle(1), lifecycle(2, 1, 1)
     def raw(e):
