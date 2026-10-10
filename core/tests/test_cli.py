@@ -173,6 +173,15 @@ def populated_core(running_core: str) -> str:
     return running_core
 
 
+@pytest.fixture
+def mixed_core(running_core: str) -> str:
+    """Core с событиями двух источников сразу — история такая же, как в жизни (§77.2)."""
+    batch = load_fixture("ingest", "ingest_batch_mixed_001.json")
+    response = httpx.post(f"{running_core}{API}/ingest/raw-events", json=batch, timeout=10)
+    assert response.status_code == 200
+    return running_core
+
+
 class TestCliAgainstRealCore:
     def test_status_reports_core_and_data(self, populated_core: str, capsys: pytest.CaptureFixture[str]) -> None:
         assert main(["--core-url", populated_core, "status"]) == 0
@@ -210,6 +219,26 @@ class TestCliAgainstRealCore:
         out = capsys.readouterr().out
         assert "process.started" in out
         assert "process.exited" not in out
+
+    def test_events_filter_by_source_separates_the_journal(
+        self, mixed_core: str, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """§77.2, пункт 8: фильтр `source` различает источники, отдельной команды не нужно."""
+        assert main(["--core-url", mixed_core, "events", "--source", "windows.eventlog"]) == 0
+
+        out = capsys.readouterr().out
+        assert "system.event" in out
+        assert "process.started" not in out
+
+    def test_events_show_both_sources_without_a_filter(
+        self, mixed_core: str, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Одна история, а не два списка: журнал и процессы видны вместе."""
+        assert main(["--core-url", mixed_core, "events"]) == 0
+
+        out = capsys.readouterr().out
+        assert "system.event" in out
+        assert "process.started" in out
 
     def test_events_time_filter_accepts_offset(self, populated_core: str, capsys: pytest.CaptureFixture[str]) -> None:
         """Смещение в параметре допустимо и пересчитывается в UTC (§24)."""

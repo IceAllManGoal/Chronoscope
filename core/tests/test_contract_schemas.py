@@ -42,11 +42,17 @@ RAW_FIXTURES = [
     ("windows", "process_start_001.json"),
     ("windows", "process_exit_001.json"),
     ("windows", "process_start_missing_path.json"),
+    ("windows", "event_log_record_001.json"),
     ("windows", "malformed_event.json"),
 ]
 EVENT_FIXTURES = [
     ("events", "process_started_001.json"),
     ("events", "process_exited_001.json"),
+    ("events", "system_event_001.json"),
+]
+INGEST_FIXTURES = [
+    ("ingest", "ingest_batch_001.json"),
+    ("ingest", "ingest_batch_mixed_001.json"),
 ]
 
 
@@ -98,14 +104,14 @@ class TestFixturesAgainstJsonSchema:
     def test_event_fixtures(self, path: tuple[str, str], schemas: dict[str, Any], registry: Registry) -> None:
         assert json_schema_errors(schemas["event.schema.json"], load_fixture(*path), registry) == []
 
-    def test_ingest_batch_fixture(self, schemas: dict[str, Any], registry: Registry) -> None:
-        instance = load_fixture("ingest", "ingest_batch_001.json")
+    @pytest.mark.parametrize("path", INGEST_FIXTURES)
+    def test_ingest_batch_fixture(self, path: tuple[str, str], schemas: dict[str, Any], registry: Registry) -> None:
+        instance = load_fixture(*path)
         assert json_schema_errors(schemas["ingest-batch.schema.json"], instance, registry) == []
 
     def test_every_json_file_is_covered(self) -> None:
         """Ни одна фикстура не должна остаться без проверки."""
-        covered = {FIXTURES_DIR.joinpath(*path) for path in RAW_FIXTURES + EVENT_FIXTURES}
-        covered.add(FIXTURES_DIR / "ingest" / "ingest_batch_001.json")
+        covered = {FIXTURES_DIR.joinpath(*path) for path in RAW_FIXTURES + EVENT_FIXTURES + INGEST_FIXTURES}
 
         present = {
             path for path in FIXTURES_DIR.rglob("*.json")
@@ -161,8 +167,9 @@ class TestPydanticAgreesWithJsonSchema:
         assert schema_ok is False
         assert pydantic_ok is False
 
-    def test_batch_fixture_accepted_by_pydantic(self) -> None:
-        IngestBatchIn.model_validate(load_fixture("ingest", "ingest_batch_001.json"))
+    @pytest.mark.parametrize("path", INGEST_FIXTURES)
+    def test_batch_fixture_accepted_by_pydantic(self, path: tuple[str, str]) -> None:
+        IngestBatchIn.model_validate(load_fixture(*path))
 
     def test_extra_field_rejected_by_both(self, schemas: dict[str, Any], registry: Registry) -> None:
         instance = {**load_fixture("windows", "process_start_001.json"), "unexpected": 1}
@@ -260,6 +267,30 @@ class TestApiResponsesMatchContract:
         assert produced["type"] == expected["type"]
         assert produced["timestamp"] == expected["timestamp"]
         assert produced["attributes"] == expected["attributes"]
+
+    def test_event_log_normalizer_output_matches_committed_fixture(self) -> None:
+        """Второй источник обязан воспроизводить свою фикстуру так же, как первый.
+
+        Проверка идёт через реестр, а не через функцию напрямую: именно реестр
+        решает, каким нормализатором обрабатывается пара «коллектор + payload», и
+        ошибка в регистрации не должна остаться незамеченной.
+        """
+        from chronoscope.normalization.registry import NormalizationContext, default_registry
+
+        expected = load_fixture("events", "system_event_001.json")
+        raw = raw_event_from_contract(load_fixture("windows", "event_log_record_001.json"))
+
+        produced = EventOut.from_domain(
+            default_registry().normalize(raw, NormalizationContext())
+        ).model_dump(mode="json")
+
+        assert produced["type"] == expected["type"]
+        assert produced["source"] == expected["source"]
+        assert produced["timestamp"] == expected["timestamp"]
+        assert produced["observed_at"] == expected["observed_at"]
+        assert produced["attributes"] == expected["attributes"]
+        assert produced["actor"] is None
+        assert produced["subject"] is None
 
 
 class TestDomainAcceptsContractFixtures:

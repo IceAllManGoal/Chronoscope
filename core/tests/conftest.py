@@ -61,6 +61,11 @@ def process_start_missing_path_payload() -> dict[str, Any]:
     return load_fixture("windows", "process_start_missing_path.json")
 
 
+@pytest.fixture
+def event_log_record_payload() -> dict[str, Any]:
+    return load_fixture("windows", "event_log_record_001.json")
+
+
 # ── База данных ──────────────────────────────────────────────────────
 
 
