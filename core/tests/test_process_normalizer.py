@@ -248,6 +248,41 @@ class TestParentResolution:
         assert len(lookup.calls) == 1
         assert lookup.calls[0]["boot_id"] is None
 
+    def test_parent_lookup_for_exit_is_bounded_by_child_start(self, process_exit_payload: dict[str, Any]) -> None:
+        """Родитель ищется не позже старта потомка, а не позже его завершения."""
+        lookup = SpyLookup(None)
+        raw = raw_event_from_contract(process_exit_payload)
+
+        normalize_process_exit(raw, context(lookup))
+
+        assert len(lookup.calls) == 1
+        assert lookup.calls[0]["pid"] == 4312
+        assert lookup.calls[0]["before"] == datetime(2026, 9, 18, 10, 42, 15, 220_000, tzinfo=UTC)
+        assert lookup.calls[0]["before"] < raw.best_timestamp
+
+    def test_reused_pid_after_child_start_is_not_made_a_parent(
+        self, process_exit_payload: dict[str, Any]
+    ) -> None:
+        """PID, переиспользованный после старта потомка, родителем не становится.
+
+        Граница поиска — старт потомка. Если искать «до времени завершения», в
+        выборку попадёт процесс, получивший этот PID уже после запуска потомка, и в
+        ``actor`` окажется чужой экземпляр — связь, которой в наблюдениях не было.
+        """
+        reused_at = datetime(2026, 9, 18, 10, 43, 0, tzinfo=UTC)  # между стартом и завершением потомка
+
+        def lookup(*, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None:
+            return EntityRef("process", PARENT_PROC_ID, "explorer.exe") if before >= reused_at else None
+
+        raw = raw_event_from_contract(process_exit_payload)
+
+        event = normalize_process_exit(raw, NormalizationContext(find_process_instance=lookup))
+
+        assert event.actor is None
+        assert event.attributes[ATTRIBUTE_PARENT_RESOLVED] is False
+        # PID родителя остаётся фактом: не построена связь, а не потеряны данные.
+        assert event.attributes["parent_pid"] == 4312
+
 
 class TestNormalizerRegistry:
     def test_default_registry_knows_process_payloads(self) -> None:
