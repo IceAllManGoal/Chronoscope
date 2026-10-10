@@ -40,11 +40,10 @@
   var nextCursor = null;
   var selectedId = null;
 
-  /* Событие, из которого пришли в панель процесса: нужно, чтобы был путь назад.
-     Одно значение, а не стек: переход «событие → процесс» — единственный, и
-     притворяться, что их может быть много, значило бы писать навигацию, которой
-     никто не пользуется. */
-  var eventBehindProcess = null;
+  var detailHistory = [];
+  var currentView = null;
+  var detailRequest = 0;
+  var listRequest = 0;
 
   function showMessage(text) {
     el.message.textContent = text;
@@ -255,17 +254,20 @@
   }
 
   function loadEvents() {
+    var request = ++listRequest;
     clearMessage();
     el.next.disabled = true;
     el.prev.disabled = true;
 
     return api('/events', Object.assign(currentFilters(), { cursor: cursors[cursorIndex] }))
       .then(function (page) {
+        if (request !== listRequest) { return; }
         nextCursor = page.next_cursor || null;
         renderEvents(page.events || []);
         renderPager(page);
       })
       .catch(function (error) {
+        if (request !== listRequest) { return; }
         showMessage(explain(error));
         el.body.replaceChildren();
         el.empty.hidden = true;
@@ -288,8 +290,11 @@
       cell(row, entityName(event.subject));
       cell(row, event.id || '—', 'id');
 
-      row.addEventListener('click', function () {
-        selectEvent(event.id);
+      row.tabIndex = 0;
+      row.setAttribute('aria-label', event.type + ' ' + event.id);
+      row.addEventListener('click', function () { selectEvent(event.id); });
+      row.addEventListener('keydown', function (key) {
+        if (key.key === 'Enter' || key.key === ' ') { key.preventDefault(); selectEvent(event.id); }
       });
 
       el.body.appendChild(row);
@@ -305,24 +310,53 @@
     el.next.disabled = !nextCursor;
   }
 
-  function selectEvent(eventId) {
-    if (!eventId) {
-      return;
+  function navigate(view, restoring) {
+    if (!restoring && currentView) {
+      detailHistory.push(currentView);
     }
-
-    selectedId = eventId;
-    Array.prototype.forEach.call(el.body.children, function (row) {
-      var id = row.lastChild ? row.lastChild.textContent : '';
-      row.className = id === eventId ? 'selected' : '';
-    });
-
+    currentView = view;
+    var request = ++detailRequest;
     clearMessage();
+    el.detail.textContent = 'Загрузка…';
+    var path = '/processes/' + encodeURIComponent(view.id);
+    var pending;
+    if (view.kind === 'event') {
+      pending = api('/events/' + encodeURIComponent(view.id));
+    } else if (view.kind === 'process') {
+      pending = Promise.all([api(path), api(path + '/relations')]);
+    } else if (view.kind === 'tree') {
+      pending = api(path + '/tree', { depth: view.depth, max_nodes: 200 });
+    } else {
+      pending = api('/events', { entity_id: view.id, limit: 25, cursor: view.cursor });
+    }
+    pending.then(function (data) {
+      if (request !== detailRequest) { return; }
+      if (view.kind === 'event') { renderDetail(data); }
+      else if (view.kind === 'process') { renderProcessDetail(data[0], data[1]); }
+      else if (view.kind === 'tree') { renderTree(data, view); }
+      else { renderRelated(data, view); }
+      renderBack();
+      el.detail.focus({ preventScroll: true });
+    }).catch(function (error) {
+      if (request !== detailRequest) { return; }
+      el.detail.textContent = 'Не удалось открыть данные.';
+      showMessage(explain(error));
+      renderBack();
+    });
+  }
 
-    api('/events/' + encodeURIComponent(eventId))
-      .then(renderDetail)
-      .catch(function (error) {
-        showMessage(explain(error));
-      });
+  function renderBack() {
+    if (detailHistory.length) {
+      renderActions([{ label: '← Назад к предыдущему экрану', ghost: true, onClick: function () {
+        navigate(detailHistory.pop(), true);
+      } }]);
+    }
+  }
+
+  function selectEvent(eventId) {
+    if (!eventId) { return; }
+    selectedId = eventId;
+    navigate({ kind: 'event', id: eventId });
   }
 
   /* Значение строки актора или субъекта: процесс становится переходом к его
@@ -396,47 +430,23 @@
 
      Панель процесса занимает место панели события: отдельного экрана для одного
      процесса не нужно, а список событий остаётся слева. */
-  function selectProcess(processInstanceId, fromEventId) {
-    if (!processInstanceId) {
-      return;
-    }
-
-    eventBehindProcess = fromEventId || null;
-    clearMessage();
-
-    api('/processes/' + encodeURIComponent(processInstanceId))
-      .then(renderProcessDetail)
-      .catch(function (error) {
-        showMessage(explain(error));
-      });
+  function selectProcess(processInstanceId) {
+    if (processInstanceId) { navigate({ kind: 'process', id: processInstanceId }); }
   }
 
   function parentValue(parent) {
-    if (!parent) {
-      return '—';
-    }
-
-    if (parent.resolved && parent.id) {
-      /* Путь назад к событию сохраняется и при переходе по цепочке: «событие →
-         процесс → родитель» не должен оставлять пользователя без возврата. */
-      return processLink({ type: 'process', id: parent.id, name: parent.name }, eventBehindProcess);
-    }
-
-    if (parent.name) {
-      return parent.name;
-    }
-
-    return parent.id || '—';
+    if (parent) { return processLink({ type: 'process', id: parent.id, name: parent.name }); }
+    return 'Экземпляр не установлен';
   }
 
-  function renderProcessDetail(detail) {
+  function renderProcessDetail(detail, relations) {
     el.detail.replaceChildren();
 
     var heading = document.createElement('h2');
     heading.textContent = 'Экземпляр процесса';
     el.detail.appendChild(heading);
 
-    var parent = detail.parent || {};
+    var parent = relations.parent;
 
     el.detail.appendChild(
       renderKv([
@@ -452,8 +462,8 @@
         ['Завершение', formatTime(detail.exited_at)],
         ['Наблюдался выход', observedLabel(detail.observed_exit)],
         ['Длительность', formatDuration(detail.duration_ms)],
-        ['Родитель', parentValue(parent)],
-        ['PID родителя', typeof parent.pid === 'number' ? String(parent.pid) : '—']
+        ['Родитель', parentValue(relations.parent_process)],
+        ['PID родителя', typeof parent.parent_pid === 'number' ? String(parent.parent_pid) : '—']
       ])
     );
 
@@ -466,46 +476,130 @@
       );
     }
 
-    if (typeof parent.pid === 'number' && !parent.resolved) {
-      notes.push('Связь с родителем не установлена: событие старта родительского процесса не наблюдалось.');
-    }
+    notes.push('Родитель: ' + resolutionLabel(parent) + '.');
+    notes.push('История может быть неполной. Связи — вывод из доступных наблюдений.');
+    if (relations.truncated) { notes.push('Выборка ограничена: ' + relations.reasons.join(', ')); }
 
     renderNotes(notes);
 
-    var actions = [
-      {
-        label: 'Показать события процесса',
-        onClick: function () {
-          showProcessEvents(detail.id);
-        }
-      }
-    ];
-
-    if (eventBehindProcess) {
-      actions.push({
-        label: '← к событию ' + eventBehindProcess,
-        ghost: true,
-        onClick: function () {
-          selectEvent(eventBehindProcess);
-        }
-      });
-    }
-
-    renderActions(actions);
+    renderEvidence(parent);
+    renderConnections('Установленные дочерние связи', relations.children);
+    renderConnections('Кандидаты: связь не установлена', relations.unresolved_children);
+    renderActions([
+      { label: 'Связанные события', onClick: function () { showProcessEvents(detail.id); } },
+      { label: 'Открыть дерево', onClick: function () { navigate({ kind: 'tree', id: detail.id, depth: 3 }); } }
+    ]);
   }
 
-  /* События экземпляра — существующим фильтром `subject_id` (§31, §32):
-     отдельного способа получить их у страницы нет и не должно быть. */
-  function showProcessEvents(processInstanceId) {
-    if (!processInstanceId) {
-      return;
-    }
+  var reasons = {
+    unique_compatible_observation: 'единственный согласованный кандидат среди наблюдений',
+    no_compatible_candidate: 'совместимый экземпляр родителя не наблюдался',
+    missing_identity_or_parent_pid: 'недостаточно данных об идентичности или PID родителя',
+    ambiguous_candidates: 'несколько допустимых экземпляров родителя',
+    actor_not_supported: 'записанная ссылка actor не подтверждается наблюдениями',
+    actor_candidate_mismatch: 'actor противоречит найденному экземпляру',
+    conflicting_parent_pids: 'наблюдения называют разные PID родителя',
+    conflicting_actor_references: 'наблюдения содержат разные actor',
+    conflicting_timestamps: 'противоречащие времена',
+    candidate_observations_conflict: 'свидетельства о кандидате противоречат друг другу',
+    evidence_limit: 'достигнут предел чтения свидетельств',
+    self_parent: 'процесс ссылается на себя как на родителя'
+  };
 
-    el.subject.value = processInstanceId;
-    cursors = [null];
-    cursorIndex = 0;
-    selectedId = null;
-    loadEvents();
+  function resolutionLabel(relation) {
+    var states = { resolved: 'Связь разрешена', unresolved: 'Неоднозначность',
+      conflicting: 'Конфликт', insufficient_observation: 'Недостаточно наблюдений' };
+    return states[relation.resolution] + ' — ' + (reasons[relation.reason] || relation.reason);
+  }
+
+  function heading(text) {
+    var node = document.createElement('h3');
+    node.textContent = text;
+    el.detail.appendChild(node);
+  }
+
+  function renderEvidence(relation) {
+    var ids = relation.evidence;
+    var details = document.createElement('details');
+    var summary = document.createElement('summary');
+    summary.textContent = 'Свидетельства связи (' + relation.evidence_count + ')';
+    details.appendChild(summary);
+    ids.slice(0, 20).forEach(function (id) {
+      var button = document.createElement('button');
+      button.type = 'button'; button.className = 'link evidence'; button.textContent = id;
+      button.addEventListener('click', function () { selectEvent(id); });
+      details.appendChild(button);
+    });
+    if (relation.evidence_count > 20) {
+      var note = document.createElement('p');
+      note.textContent = 'Показаны первые 20 ссылок. Все доступные наблюдения учтены при разрешении; API relations отдаёт до 32 ссылок.';
+      details.appendChild(note);
+    }
+    el.detail.appendChild(details);
+  }
+
+  function renderConnections(title, connections) {
+    heading(title);
+    if (!connections.length) { renderNotes(['В доступной истории не найдено.']); return; }
+    var list = document.createElement('ul');
+    list.className = 'connections';
+    connections.forEach(function (item) {
+      var row = document.createElement('li');
+      row.appendChild(processLink({ type: 'process', id: item.process.id, name: item.process.name }));
+      var status = document.createElement('p');
+      status.className = 'hint'; status.textContent = resolutionLabel(item.relationship);
+      row.appendChild(status); list.appendChild(row);
+    });
+    el.detail.appendChild(list);
+  }
+
+  function renderTree(tree, view) {
+    el.detail.replaceChildren(); heading('Наблюдаемое дерево процессов');
+    renderNotes(['История может быть неполной. В дерево входят только разрешённые связи.']);
+    if (tree.truncated) { renderNotes(['Дерево ограничено: ' + tree.reasons.join(', ')]); }
+    renderNotes(['Кандидатов с неустановленной связью: ' + tree.unresolved_children]);
+    var depthLabel = document.createElement('label'); depthLabel.textContent = 'Глубина ';
+    var depth = document.createElement('select'); depth.setAttribute('aria-label', 'Глубина дерева');
+    for (var i = 0; i <= 5; i++) {
+      var option = document.createElement('option'); option.value = String(i); option.textContent = String(i);
+      option.selected = i === view.depth; depth.appendChild(option);
+    }
+    depth.addEventListener('change', function () { navigate({ kind: 'tree', id: view.id, depth: Number(depth.value) }); });
+    depthLabel.appendChild(depth); el.detail.appendChild(depthLabel);
+    var rootList = document.createElement('ul'); rootList.className = 'process-tree';
+    var lists = {};
+    tree.nodes.forEach(function (node) {
+      var row = document.createElement('li');
+      row.appendChild(processLink({ type: 'process', id: node.process.id, name: node.process.name }));
+      var children = document.createElement('ul'); row.appendChild(children);
+      lists[node.process.id] = children;
+      (lists[node.parent_instance_id] || rootList).appendChild(row);
+    });
+    el.detail.appendChild(rootList);
+    if (tree.nodes.length === 1) { renderNotes(['В выбранных пределах установленных потомков нет.']); }
+    renderActions([{ label: 'Связанные события корня', onClick: function () { showProcessEvents(view.id); } }]);
+  }
+
+  function showProcessEvents(processInstanceId) {
+    navigate({ kind: 'related', id: processInstanceId, cursor: null });
+  }
+
+  function renderRelated(page, view) {
+    el.detail.replaceChildren(); heading('Связанные события');
+    renderNotes(['Сохранённые ссылки actor или subject. Соседство по времени сюда не входит; исторический actor может быть оспорен новыми наблюдениями.']);
+    if (!page.events.length) { renderNotes(['Связанных событий не найдено.']); }
+    page.events.forEach(function (event) {
+      var button = document.createElement('button');
+      button.type = 'button'; button.className = 'link evidence';
+      button.textContent = formatTime(event.timestamp) + ' · ' + event.type + ' · ' + event.id;
+      button.addEventListener('click', function () { selectEvent(event.id); });
+      el.detail.appendChild(button);
+    });
+    if (page.next_cursor) {
+      renderActions([{ label: 'Следующие связанные события →', onClick: function () {
+        navigate({ kind: 'related', id: view.id, cursor: page.next_cursor });
+      } }]);
+    }
   }
 
   function loadCoreState() {

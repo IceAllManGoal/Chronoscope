@@ -183,6 +183,29 @@ def mixed_core(running_core: str) -> str:
 
 
 class TestCliAgainstRealCore:
+    def test_relations_and_tree_use_real_http(self, populated_core, capsys):
+        assert main(["--core-url", populated_core, "process-relations", PROC_ID]) == 0
+        out = capsys.readouterr().out
+        assert "4312" in out and "insufficient_observation" in out
+        assert "История может быть неполной" in out
+        assert main(["--core-url", populated_core, "process-tree", PROC_ID, "--depth", "0"]) == 0
+        out = capsys.readouterr().out
+        assert PROC_ID in out and "установленных потомков нет" in out
+        assert main(["--core-url", populated_core, "events", "--entity-id", PROC_ID]) == 0
+        out = capsys.readouterr().out
+        assert "process.started" in out and "process.exited" in out
+
+    @pytest.mark.parametrize("command", ["process-relations", "process-tree"])
+    def test_connections_have_clear_errors(self, running_core, capsys, command):
+        assert main(["--core-url", running_core, command, PROC_ID]) == 1
+        assert "not_found" in capsys.readouterr().err
+        assert main(["--core-url", running_core, command, "not-an-id"]) == 1
+        assert "invalid_input" in capsys.readouterr().err
+
+    def test_tree_rejects_unbounded_parameters(self, populated_core, capsys):
+        assert main(["--core-url", populated_core, "process-tree", PROC_ID, "--depth", "6"]) == 1
+        assert "invalid_input" in capsys.readouterr().err
+
     def test_status_reports_core_and_data(self, populated_core: str, capsys: pytest.CaptureFixture[str]) -> None:
         assert main(["--core-url", populated_core, "status"]) == 0
 
