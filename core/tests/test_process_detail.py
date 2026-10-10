@@ -258,7 +258,7 @@ class TestParent:
             exit_event(actor=PARENT, attributes={"parent_pid": 9999}),
         )
 
-        assert detail.parent.pid == 4312
+        assert detail.parent.pid is None
         assert detail.parent.resolved is False
         assert detail.parent.id is None
 

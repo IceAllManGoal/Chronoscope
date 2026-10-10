@@ -7,10 +7,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi import status as http_status
 
 from chronoscope.api.dependencies import get_get_process_detail
+from chronoscope.api.dependencies import get_process_relations, get_process_tree
+from chronoscope.api.connection_schemas import ProcessRelationsOut, ProcessTreeOut
+from chronoscope.application.queries.process_connections import GetProcessRelations, GetProcessTree
 from chronoscope.api.schemas import ErrorOut, ProcessDetailOut
 from chronoscope.application.queries.get_process_detail import GetProcessDetail
 from chronoscope.domain.ids import PREFIX_PROCESS_INSTANCE, prefixed_id_pattern
@@ -43,3 +46,30 @@ def get_process(
         )
 
     return ProcessDetailOut.from_domain(detail)
+
+
+@router.get("/processes/{process_instance_id}/relations", response_model=ProcessRelationsOut,
+            responses={404: {"model": ErrorOut}, 422: {"model": ErrorOut}})
+def relations(
+    process_instance_id: str = Path(pattern=prefixed_id_pattern(PREFIX_PROCESS_INSTANCE)),
+    limit: int = Query(100, ge=1, le=200),
+    use_case: GetProcessRelations = Depends(get_process_relations),
+) -> ProcessRelationsOut:
+    result = use_case.execute(process_instance_id, limit=limit)
+    if result is None:
+        raise HTTPException(404, "экземпляр процесса не найден")
+    return ProcessRelationsOut.model_validate(result)
+
+
+@router.get("/processes/{process_instance_id}/tree", response_model=ProcessTreeOut,
+            responses={404: {"model": ErrorOut}, 422: {"model": ErrorOut}})
+def tree(
+    process_instance_id: str = Path(pattern=prefixed_id_pattern(PREFIX_PROCESS_INSTANCE)),
+    depth: int = Query(3, ge=0, le=5),
+    max_nodes: int = Query(200, ge=1, le=200),
+    use_case: GetProcessTree = Depends(get_process_tree),
+) -> ProcessTreeOut:
+    result = use_case.execute(process_instance_id, depth=depth, max_nodes=max_nodes)
+    if result is None:
+        raise HTTPException(404, "экземпляр процесса не найден")
+    return ProcessTreeOut.model_validate(result)

@@ -102,20 +102,37 @@ def test_instance_events_are_read_by_index(migrated_engine) -> None:  # noqa: AN
 
 def test_event_indexes_include_ordering_key(migrated_engine) -> None:  # noqa: ANN001
     """Состав индексов совпадает с сортировкой, а не только имена."""
-    inspector = sa.inspect(migrated_engine)
-
     for name, expected in EXPECTED_INDEX_COLUMNS.items():
-        index = next(
-            (item for item in inspector.get_indexes("events") if item["name"] == name),
-            None,
-        )
-        assert index is not None, f"индекс {name} не найден"
-        assert index["column_names"] == expected, (
-            f"{name}: состав {index['column_names']} не совпадает с сортировкой {expected}"
-        )
+        with migrated_engine.connect() as connection:
+            columns = [row[2] for row in connection.exec_driver_sql(f"PRAGMA index_info('{name}')")]
+        assert columns == expected
 
 
 def test_migration_keeps_index_names(migrated_engine) -> None:  # noqa: ANN001
     """Миграция пересоздаёт индексы под теми же именами (§27, ruleset)."""
-    inspector = sa.inspect(migrated_engine)
-    assert {index["name"] for index in inspector.get_indexes("events")} == set(EXPECTED_INDEX_COLUMNS)
+    with migrated_engine.connect() as connection:
+        names = {row[1] for row in connection.exec_driver_sql("PRAGMA index_list('events')") if row[3] == "c"}
+    assert names == set(EXPECTED_INDEX_COLUMNS) | {"ix_events_process_pid", "ix_events_process_parent_pid"}
+
+
+@pytest.mark.parametrize("field", ["pid", "parent_pid"])
+@pytest.mark.parametrize("key_count", [1, 2, 200])
+def test_connect_search_uses_scoped_index(migrated_engine, field, key_count):
+    from chronoscope.infrastructure.database.repositories import build_process_ids_statement
+    from tests.factories import HOST_ID, BOOT_ID
+    statement = build_process_ids_statement(tuple((HOST_ID, BOOT_ID, i) for i in range(key_count)), field=field, limit=2001)
+    plan = statement_plan(migrated_engine, statement)
+    assert any("ix_events_process_" + field in line for line in plan), plan
+    assert not any("ix_events_type_timestamp" in line or "SCAN events" in line for line in plan), plan
+
+
+def test_connect_expression_indexes_match_models(migrated_engine):
+    from sqlalchemy.schema import CreateIndex
+    from chronoscope.infrastructure.database.models import events
+    with migrated_engine.connect() as connection:
+        for index in events.indexes:
+            if not index.name.startswith("ix_events_process_"):
+                continue
+            actual = connection.execute(sa.text("SELECT sql FROM sqlite_master WHERE name=:name"), {"name": index.name}).scalar_one()
+            expected = str(CreateIndex(index).compile(migrated_engine))
+            assert actual.replace(" ", "") == expected.replace(" ", "")

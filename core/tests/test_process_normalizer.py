@@ -49,7 +49,7 @@ class SpyLookup:
         self.result = result
         self.calls: list[dict[str, Any]] = []
 
-    def __call__(self, *, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None:
+    def __call__(self, *, host_id: str, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None:
         self.calls.append({"boot_id": boot_id, "pid": pid, "before": before})
         return self.result
 
@@ -271,7 +271,7 @@ class TestParentResolution:
         """
         reused_at = datetime(2026, 9, 18, 10, 43, 0, tzinfo=UTC)  # между стартом и завершением потомка
 
-        def lookup(*, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None:
+        def lookup(*, host_id: str, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None:
             return EntityRef("process", PARENT_PROC_ID, "explorer.exe") if before >= reused_at else None
 
         raw = raw_event_from_contract(process_exit_payload)
