@@ -50,6 +50,10 @@ EVENT_FIXTURES = [
     ("events", "process_exited_001.json"),
     ("events", "system_event_001.json"),
 ]
+INGEST_FIXTURES = [
+    ("ingest", "ingest_batch_001.json"),
+    ("ingest", "ingest_batch_mixed_001.json"),
+]
 
 
 @pytest.fixture(scope="module")
@@ -100,14 +104,14 @@ class TestFixturesAgainstJsonSchema:
     def test_event_fixtures(self, path: tuple[str, str], schemas: dict[str, Any], registry: Registry) -> None:
         assert json_schema_errors(schemas["event.schema.json"], load_fixture(*path), registry) == []
 
-    def test_ingest_batch_fixture(self, schemas: dict[str, Any], registry: Registry) -> None:
-        instance = load_fixture("ingest", "ingest_batch_001.json")
+    @pytest.mark.parametrize("path", INGEST_FIXTURES)
+    def test_ingest_batch_fixture(self, path: tuple[str, str], schemas: dict[str, Any], registry: Registry) -> None:
+        instance = load_fixture(*path)
         assert json_schema_errors(schemas["ingest-batch.schema.json"], instance, registry) == []
 
     def test_every_json_file_is_covered(self) -> None:
         """Ни одна фикстура не должна остаться без проверки."""
-        covered = {FIXTURES_DIR.joinpath(*path) for path in RAW_FIXTURES + EVENT_FIXTURES}
-        covered.add(FIXTURES_DIR / "ingest" / "ingest_batch_001.json")
+        covered = {FIXTURES_DIR.joinpath(*path) for path in RAW_FIXTURES + EVENT_FIXTURES + INGEST_FIXTURES}
 
         present = {
             path for path in FIXTURES_DIR.rglob("*.json")
@@ -163,8 +167,9 @@ class TestPydanticAgreesWithJsonSchema:
         assert schema_ok is False
         assert pydantic_ok is False
 
-    def test_batch_fixture_accepted_by_pydantic(self) -> None:
-        IngestBatchIn.model_validate(load_fixture("ingest", "ingest_batch_001.json"))
+    @pytest.mark.parametrize("path", INGEST_FIXTURES)
+    def test_batch_fixture_accepted_by_pydantic(self, path: tuple[str, str]) -> None:
+        IngestBatchIn.model_validate(load_fixture(*path))
 
     def test_extra_field_rejected_by_both(self, schemas: dict[str, Any], registry: Registry) -> None:
         instance = {**load_fixture("windows", "process_start_001.json"), "unexpected": 1}

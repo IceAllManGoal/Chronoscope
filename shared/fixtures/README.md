@@ -18,6 +18,7 @@
 | `windows/event_log_record_001.json` | Запись журнала Windows (`windows.eventlog`): канал, поставщик, `event_id`, `record_id`, `level`. Сообщения нет — оно появляется только при `capture_message` | да |
 | `windows/malformed_event.json` | **Намеренно невалидное** событие — негативный тест ingest | **нет, ожидаемо** |
 | `ingest/ingest_batch_001.json` | Batch envelope из двух событий, `POST /api/v1/ingest/raw-events` | да |
+| `ingest/ingest_batch_mixed_001.json` | Тот же маршрут, но в одном пакете оба источника: `windows.process` и `windows.eventlog` — так их увидит Core от одного Agent (§77.2, пункт 8) | да |
 | `events/process_started_001.json` | Ожидаемый результат нормализации `windows/process_start_001.json` | да |
 | `events/process_exited_001.json` | Ожидаемый результат нормализации `windows/process_exit_001.json` | да |
 | `events/system_event_001.json` | Ожидаемый результат нормализации `windows/event_log_record_001.json`: `system.event` без `actor` и `subject` | да |
