@@ -74,6 +74,12 @@ class CoreClient:
         """Экземпляр процесса как сущность (§77.1)."""
         return self._get(f"/processes/{urllib.parse.quote(process_instance_id, safe='')}")
 
+    def process_relations(self, instance_id: str, *, limit: int = 100) -> Mapping[str, Any]:
+        return self._get(f"/processes/{urllib.parse.quote(instance_id, safe='')}/relations", {"limit": limit})
+
+    def process_tree(self, instance_id: str, *, depth: int = 3, max_nodes: int = 200) -> Mapping[str, Any]:
+        return self._get(f"/processes/{urllib.parse.quote(instance_id, safe='')}/tree", {"depth": depth, "max_nodes": max_nodes})
+
     def _get(self, path: str, params: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
         url = f"{self.base_url}{API_PREFIX}{path}"
         if params:
