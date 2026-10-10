@@ -1,3 +1,4 @@
+using System.Diagnostics.Eventing.Reader;
 using Chronoscope.Agent.Abstractions;
 using Chronoscope.Agent.Collectors;
 using Chronoscope.Agent.Collectors.Windows;
@@ -122,5 +123,67 @@ public class WindowsEventLogObservationSourceTests
         second.Cancel();
 
         await secondWatch.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    /// <summary>
+    /// Уже существующие записи не приходят: источник наблюдает только за новыми (§12, §77.2 пункт 3).
+    ///
+    /// Проверка имеет силу только на непустом журнале, поэтому сначала выясняется,
+    /// что записи до подписки были. Иначе тест проходил бы на пустом месте и
+    /// доказывал бы ровно ничего. Снять флаг <c>readExistingEvents: false</c> нельзя
+    /// незаметно: тогда придут записи старше момента подписки, и проверка упадёт.
+    /// </summary>
+    [Fact]
+    public async Task ExistingRecordsAreNotDelivered()
+    {
+        const string channel = "Application";
+        var newestBefore = NewestRecordTime(channel);
+
+        var source = new WindowsEventLogObservationSource(Settings(channel));
+        var delivered = new List<EventLogObservation>();
+        using var cancellation = new CancellationTokenSource();
+
+        var watch = source.WatchAsync(
+            observation =>
+            {
+                lock (delivered)
+                {
+                    delivered.Add(observation);
+                }
+            },
+            cancellation.Token);
+
+        await Task.Delay(1500);
+        cancellation.Cancel();
+        await watch.WaitAsync(TimeSpan.FromSeconds(10));
+
+        EventLogObservation[] observed;
+        lock (delivered)
+        {
+            observed = [.. delivered];
+        }
+
+        Assert.All(
+            observed,
+            observation => Assert.True(
+                newestBefore is null || observation.RecordedAt is null || observation.RecordedAt > newestBefore,
+                $"пришла запись, существовавшая до подписки: {observation.RecordedAt:o} <= {newestBefore:o}"));
+    }
+
+    /// <summary>Время самой новой записи канала на момент вызова.</summary>
+    private static DateTimeOffset? NewestRecordTime(string channel)
+    {
+        var query = new EventLogQuery(channel, PathType.LogName, "*")
+        {
+            TolerateQueryErrors = false,
+            ReverseDirection = true,
+        };
+
+        using var reader = new EventLogReader(query);
+        using var record = reader.ReadEvent();
+
+        return record?.TimeCreated is null
+            ? null
+            : new DateTimeOffset(record.TimeCreated.Value.ToUniversalTime());
     }
 }
