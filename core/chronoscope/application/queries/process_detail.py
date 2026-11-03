@@ -204,17 +204,18 @@ def _duration(started_at: datetime | None, exited_at: datetime | None) -> timede
 
 
 def _parent(events: Sequence[Event]) -> ProcessParent:
-    """Родитель экземпляра по его же событиям.
+    """Историческая ссылка из событий, с сохранением контракта ProcessDetail.
 
-    Идентичность берётся только у того события, чей ``parent_pid`` совпал с уже
-    известным: если источник назвал разные родительские PID, выдать связь за
-    установленную нельзя, а сообщить чужой идентификатор — тем более.
-
-    Связь ищется по всем событиям экземпляра, а не только по событию запуска:
-    родителя могло не быть в хранилище в момент нормализации запуска, но он
-    появился там к моменту завершения. Выбирать при этом «более удачное»
-    наблюдение — не догадка: оба наблюдения записаны в самих событиях.
+    Несогласованные PID/actors сбрасывают resolved. Проверка жизненного цикла
+    и конкурирующих экземпляров выполняется отдельно в GetProcessRelations:
+    записанный actor сам по себе не доказывает актуальную связь.
     """
+    pids = {_attribute_int(e, PAYLOAD_FIELD_PARENT_PID) for e in events}
+    pids.discard(None)
+    actors = {e.actor.id for e in events if e.actor is not None}
+    if len(pids) > 1 or len(actors) > 1:
+        return ProcessParent(pid=next(iter(pids)) if len(pids) == 1 else None)
+
     parent_pid: int | None = None
     actor = None
 

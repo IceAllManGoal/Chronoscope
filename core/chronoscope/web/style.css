@@ -213,3 +213,13 @@ button.link:hover { text-decoration-color: var(--accent); }
   font-size: 12px;
 }
 code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+/* Connect: real instance IDs wrap, tree nesting stays readable on narrow panels. */
+.connections, .process-tree { padding-left: 1.2rem; }
+.process-tree ul { padding-left: 1.1rem; border-left: 1px solid var(--line); }
+.process-tree li, .connections li { margin: .65rem 0; }
+.detail button.link { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.evidence { display: block; margin: .6rem 0; }
+.connections .hint { margin: .25rem 0; }
+summary { cursor: pointer; padding: .6rem 0; }
+button:focus-visible, select:focus-visible, tr:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.detail select { color: var(--text); background: var(--panel-2); border: 1px solid var(--line); padding: .3rem; border-radius: 4px; }

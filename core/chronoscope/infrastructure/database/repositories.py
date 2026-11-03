@@ -24,10 +24,11 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Connection, Engine, and_, func, or_, select
+from sqlalchemy import Connection, Engine, and_, func, or_, select, literal_column, union
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -42,6 +43,7 @@ from chronoscope.domain.events.entity_ref import EntityRef
 from chronoscope.domain.events.event import Event
 from chronoscope.domain.events.event_type import ENTITY_PROCESS, PROCESS_STARTED
 from chronoscope.domain.events.raw_event import RawEvent
+from chronoscope.domain.process_relationships import LIFECYCLE_TYPES, ProcessKey
 from chronoscope.domain.timestamps import format_utc_fixed, parse_utc
 from chronoscope.infrastructure.database.models import (
     ATTRIBUTE_PID_PATH,
@@ -132,6 +134,20 @@ def build_list_statement(query: EventQuery) -> Any:
             )
         )
 
+    if query.entity_id is not None:
+        # Limit each indexed stream before merging, with UNION removing an
+        # event that references the entity in both roles. The same cursor and
+        # filters apply to both streams; Python never sorts event history.
+        streams = []
+        for role in (events.c.actor_id, events.c.subject_id):
+            branch = (select(events).where(*conditions, role == query.entity_id)
+                      .order_by(events.c.timestamp.desc(), events.c.id.desc())
+                      .limit(query.limit + 1).subquery())
+            streams.append(select(branch))
+        merged = union(*streams).subquery()
+        return (select(merged).order_by(merged.c.timestamp.desc(), merged.c.id.desc())
+                .limit(query.limit + 1))
+
     return (
         select(events)
         .where(and_(*conditions) if conditions else True)  # type: ignore[arg-type]
@@ -163,6 +179,27 @@ def build_instance_events_statement(process_instance_id: str, *, limit: int) -> 
 
 
 # ── Преобразование строк БД в доменные объекты ───────────────────────
+
+
+def build_process_ids_statement(keys: tuple[ProcessKey, ...], *, field: str, limit: int):
+    if field not in ("pid", "parent_pid"):
+        raise ValueError("unsupported process lookup field")
+    # A literal JSON path is required for SQLite expression-index matching.
+    value = func.json_extract(events.c.attributes_json, literal_column("'$." + field + "'"))
+    grouped: dict[tuple[str, str], list[int]] = {}
+    for host, boot, pid in keys:
+        grouped.setdefault((host, boot), []).append(pid)
+    scopes = [and_(events.c.host_id == host, events.c.boot_id == boot, value.in_(pids))
+              for (host, boot), pids in grouped.items()]
+    return (select(events.c.subject_id).where(
+        events.c.type.in_(LIFECYCLE_TYPES), events.c.subject_type == "process",
+        events.c.subject_id.is_not(None), or_(*scopes),
+    ).distinct().order_by(events.c.subject_id).limit(limit))
+
+
+def build_instances_events_statement(ids: tuple[str, ...], *, limit: int):
+    return (select(events).where(events.c.subject_id.in_(ids), events.c.type.in_(LIFECYCLE_TYPES))
+            .order_by(events.c.subject_id, events.c.timestamp, events.c.id).limit(limit))
 
 
 def _entity_ref(entity_type: str | None, entity_id: str | None, name: str | None) -> EntityRef | None:
@@ -295,6 +332,39 @@ class RawEventRepository(_Repository):
 class EventRepository(_Repository):
     """Хранилище нормализованных событий (§13, §26). Реализует ``EventRepositoryPort`` (§50)."""
 
+    @contextmanager
+    def snapshot(self):
+        # sqlite3's legacy transaction mode does not BEGIN for SELECT.
+        # Explicit BEGIN pins a WAL snapshot at the first read.
+        if isinstance(self._source, Connection):
+            yield self
+            return
+        try:
+            with self._source.connect() as connection:
+                connection.exec_driver_sql("BEGIN")
+                try:
+                    yield EventRepository(connection)
+                finally:
+                    connection.rollback()
+        except SQLAlchemyError as exc:
+            raise StorageError(f"не удалось прочитать связи: {exc}") from exc
+
+    def find_process_ids(self, keys: tuple[ProcessKey, ...], *, field: str, limit: int) -> tuple[str, ...]:
+        if not keys:
+            return ()
+        try:
+            return tuple(self._read(build_process_ids_statement(keys, field=field, limit=limit)).scalars())
+        except SQLAlchemyError as exc:
+            raise StorageError(f"не удалось найти процессы: {exc}") from exc
+
+    def find_instances_events(self, ids: tuple[str, ...], *, limit: int) -> tuple[Event, ...]:
+        if not ids:
+            return ()
+        try:
+            return tuple(_row_to_event(row) for row in self._read(build_instances_events_statement(ids, limit=limit)))
+        except SQLAlchemyError as exc:
+            raise StorageError(f"не удалось прочитать наблюдения процессов: {exc}") from exc
+
     def insert(self, event: Event, *, ingested_at: datetime) -> bool:
         """Сохранить нормализованное событие.
 
@@ -404,56 +474,30 @@ class EventRepository(_Repository):
             raise StorageError(f"не удалось посчитать недавние events: {exc}") from exc
 
     def find_process_instance(
-        self,
-        *,
-        boot_id: str | None,
-        pid: int,
-        before: datetime,
+        self, *, host_id: str, boot_id: str | None, pid: int, before: datetime,
     ) -> EntityRef | None:
-        """Найти экземпляр процесса по PID в пределах boot session (§14, §20).
+        """Ingest uses the same conservative rules as the Connect read view.
 
-        Нужен нормализатору, чтобы заполнить ``actor`` события
-        ``process.started``: родитель известен по PID, но его идентичность —
-        это ``process_instance_id``, который выводится из времени старта
-        родителя. Времени старта у нас нет, поэтому родителя приходится искать
-        среди уже сохранённых событий.
-
-        Возвращается готовая ссылка на сущность вместе с именем: имя родителя
-        в событиях запуска не приходит, но оно уже сохранено в событии старта
-        родителя. Читать его оттуда — это использование известного факта, а не
-        догадка, и без него UI не смог бы показать цепочку
-        ``explorer.exe → notepad.exe`` (§20) без второго запроса.
-
-        Если ``boot_id`` неизвестен, поиск **не выполняется**. PID без boot
-        session может совпасть с процессом предыдущей загрузки, и тогда
-        подставленный ``actor`` был бы не связью, а вымыслом.
+        The caller owns the ingest transaction. No historical Event is updated
+        when later evidence changes the view. Unknown/over-budget stays unknown.
         """
+        from chronoscope.domain.process_relationships import ProcessObservation, observe_process, resolve_parent
+
         if boot_id is None:
             return None
-
-        pid_value = func.json_extract(events.c.attributes_json, ATTRIBUTE_PID_PATH)
-
-        statement = (
-            select(events.c.subject_id, events.c.subject_name)
-            .where(
-                and_(
-                    events.c.type == PROCESS_STARTED,
-                    events.c.boot_id == boot_id,
-                    events.c.subject_id.is_not(None),
-                    events.c.timestamp <= format_utc_fixed(before),
-                    pid_value == pid,
-                )
-            )
-            .order_by(events.c.timestamp.desc(), events.c.id.desc())
-            .limit(1)
-        )
-
-        try:
-            row = self._read(statement).one_or_none()
-        except SQLAlchemyError as exc:
-            raise StorageError(f"не удалось найти экземпляр процесса: {exc}") from exc
-
-        if row is None:
+        ids = self.find_process_ids(((host_id, boot_id, pid),), field="pid", limit=201)
+        if len(ids) > 200:
             return None
-
-        return EntityRef(ENTITY_PROCESS, row.subject_id, row.subject_name)
+        rows = self.find_instances_events(ids, limit=2001)
+        if len(rows) > 2000:
+            return None
+        grouped = {id_: [] for id_ in ids}
+        for item in rows:
+            grouped[item.subject.id].append(item)
+        candidates = [observe_process(id_, items) for id_, items in grouped.items()]
+        child = ProcessObservation("", None, host_id, boot_id, None, before, None, (pid,), (), ())
+        relation = resolve_parent(child, candidates)
+        if relation.parent_instance_id is None:
+            return None
+        parent = next(p for p in candidates if p.id == relation.parent_instance_id)
+        return EntityRef(ENTITY_PROCESS, parent.id, parent.name)

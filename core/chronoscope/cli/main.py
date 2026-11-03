@@ -73,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     events.add_argument("--source", default=None, help="источник, например windows.process")
     events.add_argument("--actor-id", dest="actor_id", default=None, help="идентификатор актора")
     events.add_argument("--subject-id", dest="subject_id", default=None, help="идентификатор субъекта")
+    events.add_argument("--entity-id", default=None, help="сохранённая ссылка actor OR subject")
     events.add_argument("--from", dest="time_from", default=None, help="начало периода, включительно (ISO 8601)")
     events.add_argument("--to", dest="time_to", default=None, help="конец периода, включительно (ISO 8601)")
     events.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help=f"размер страницы (по умолчанию {DEFAULT_LIMIT})")
@@ -89,6 +90,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("doctor", help="диагностика: доступность Core, схема, данные")
+
+    relations = subparsers.add_parser("process-relations", help="родитель, дети и свидетельства связи")
+    relations.add_argument("process_instance_id", metavar="<id>")
+    relations.add_argument("--limit", type=int, default=100, help="максимум детей/кандидатов (1..200)")
+    tree = subparsers.add_parser("process-tree", help="ограниченное дерево наблюдаемых потомков")
+    tree.add_argument("process_instance_id", metavar="<id>")
+    tree.add_argument("--depth", type=int, default=3, help="глубина (0..5)")
+    tree.add_argument("--max-nodes", type=int, default=200, help="максимум узлов, включая корень (1..200)")
 
     return parser
 
@@ -114,6 +123,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return command_event(client, args.event_id)
         if args.command == "process":
             return command_process(client, args.process_instance_id)
+        if args.command == "process-relations":
+            return command_relations(client, args.process_instance_id, args.limit)
+        if args.command == "process-tree":
+            return command_tree(client, args.process_instance_id, args.depth, args.max_nodes)
         if args.command == "doctor":
             return command_doctor(client)
     except CoreUnavailable as error:
@@ -173,6 +186,7 @@ def command_events(client: CoreClient, args: argparse.Namespace) -> int:
         source=args.source,
         actor_id=args.actor_id,
         subject_id=args.subject_id,
+        entity_id=args.entity_id,
         **{"from": args.time_from, "to": args.time_to},
         limit=args.limit,
         cursor=args.cursor,
@@ -269,7 +283,7 @@ def command_process(client: CoreClient, process_instance_id: str) -> int:
         # Разные факты: PID приходит от источника, идентичность родителя — из
         # наблюдавшегося события его старта (§20).
         notes.append(
-            "Связь с родителем не установлена: событие старта родительского процесса не наблюдалось."
+            "Связь с родителем не установлена: наблюдений недостаточно или они противоречат друг другу."
         )
 
     if detail.get("observed_exit") is False:
@@ -287,6 +301,51 @@ def command_process(client: CoreClient, process_instance_id: str) -> int:
     print("События этого экземпляра:")
     print(f"  {PROGRAM} events --subject-id {detail.get('id', process_instance_id)}")
 
+    return 0
+
+
+def _observation_note(body: Mapping[str, Any]) -> None:
+    print("История может быть неполной. Связи — вывод из доступных наблюдений.")
+    if body.get("truncated"):
+        print("Выборка ограничена: " + ", ".join(body.get("reasons", [])))
+
+
+def command_relations(client: CoreClient, instance_id: str, limit: int) -> int:
+    body = client.process_relations(instance_id, limit=limit)
+    print("Процесс: " + rendering._entity_label(body["process"]))
+    parent = body["parent"]
+    print("Родитель: " + rendering._entity_label(body.get("parent_process")))
+    print(f"PID родителя: {parent['parent_pid']}; {parent['resolution']} — {parent['reason']}")
+    print("Свидетельства: " + (", ".join(parent["evidence"]) or "нет"))
+    if parent["evidence_truncated"]:
+        print(f"Показаны первые 32 ссылки из {parent['evidence_count']}; все наблюдения учтены при разрешении.")
+    print("Дети:")
+    for child in body["children"]:
+        print("  " + rendering._entity_label(child["process"]))
+    if not body["children"]:
+        print("  Установленных связей не найдено.")
+    for child in body["unresolved_children"]:
+        print("Кандидат (связь не установлена): " + rendering._entity_label(child["process"]) +
+              " — " + child["relationship"]["resolution"] + ": " + child["relationship"]["reason"])
+    _observation_note(body)
+    print(f"Связанные события: {PROGRAM} events --entity-id {instance_id}")
+    return 0
+
+
+def command_tree(client: CoreClient, instance_id: str, depth: int, max_nodes: int) -> int:
+    body = client.process_tree(instance_id, depth=depth, max_nodes=max_nodes)
+    children: dict[str | None, list] = {}
+    for node in body["nodes"]:
+        children.setdefault(node["parent_instance_id"], []).append(node)
+    stack = list(reversed(children.get(None, [])))
+    while stack:
+        node = stack.pop()
+        print("  " * node["depth"] + ("└─ " if node["depth"] else "") + rendering._entity_label(node["process"]))
+        stack.extend(reversed(children.get(node["process"]["id"], [])))
+    if len(body["nodes"]) == 1:
+        print("В выбранных пределах установленных потомков нет.")
+    print(f"Кандидатов с неустановленной связью: {body['unresolved_children']}")
+    _observation_note(body)
     return 0
 
 

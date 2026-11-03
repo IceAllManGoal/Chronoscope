@@ -21,6 +21,7 @@ from chronoscope.application.ingest.ingest_raw_event import IngestRawEvent
 from chronoscope.application.queries.core_status import GetCoreStatus
 from chronoscope.application.queries.get_event import GetEvent
 from chronoscope.application.queries.get_process_detail import GetProcessDetail
+from chronoscope.application.queries.process_connections import GetProcessRelations, GetProcessTree
 from chronoscope.application.queries.list_events import ListEvents
 from chronoscope.infrastructure.config.settings import CoreSettings
 from chronoscope.infrastructure.database.engine import create_database_engine, missing_tables
@@ -46,6 +47,8 @@ class CoreContainer:
     list_events: ListEvents
     get_event: GetEvent
     get_process_detail: GetProcessDetail
+    get_process_relations: GetProcessRelations
+    get_process_tree: GetProcessTree
     get_core_status: GetCoreStatus
     version: str
 
@@ -91,6 +94,8 @@ class CoreContainer:
             list_events=ListEvents(event_repository),
             get_event=GetEvent(event_repository),
             get_process_detail=GetProcessDetail(event_repository),
+            get_process_relations=GetProcessRelations(event_repository),
+            get_process_tree=GetProcessTree(event_repository),
             get_core_status=GetCoreStatus(
                 raw_repository=raw_repository,
                 event_repository=event_repository,
@@ -160,6 +165,14 @@ def get_get_event(container: CoreContainer = Depends(get_container)) -> GetEvent
 
 def get_get_process_detail(container: CoreContainer = Depends(get_container)) -> GetProcessDetail:
     return container.get_process_detail
+
+
+def get_process_relations(container: CoreContainer = Depends(get_container)) -> GetProcessRelations:
+    return container.get_process_relations
+
+
+def get_process_tree(container: CoreContainer = Depends(get_container)) -> GetProcessTree:
+    return container.get_process_tree
 
 
 def get_get_core_status(container: CoreContainer = Depends(get_container)) -> GetCoreStatus:

@@ -33,10 +33,10 @@ class ProcessInstanceLookup(Protocol):
     ним вторым запросом.
     """
 
-    def __call__(self, *, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None: ...
+    def __call__(self, *, host_id: str, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None: ...
 
 
-def no_process_lookup(*, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None:
+def no_process_lookup(*, host_id: str, boot_id: str | None, pid: int, before: datetime) -> EntityRef | None:
     """Реализация-заглушка: ничего не находит.
 
     Используется там, где искать негде (изолированные тесты нормализатора) и

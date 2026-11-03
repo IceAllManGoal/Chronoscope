@@ -28,6 +28,7 @@ application, а не конкретная технология: «сохрани
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import AbstractContextManager
 from datetime import datetime
 from types import TracebackType
 from typing import Callable, Protocol
@@ -36,6 +37,7 @@ from chronoscope.domain.errors import InvalidInputError
 from chronoscope.domain.events.entity_ref import EntityRef
 from chronoscope.domain.events.event import Event
 from chronoscope.domain.events.raw_event import RawEvent
+from chronoscope.domain.process_relationships import ProcessKey
 
 DEFAULT_PAGE_LIMIT = 100
 MAX_PAGE_LIMIT = 1000
@@ -51,6 +53,7 @@ class EventQuery:
     source: str | None = None
     actor_id: str | None = None
     subject_id: str | None = None
+    entity_id: str | None = None
     time_from: datetime | None = None
     time_to: datetime | None = None
 
@@ -92,6 +95,14 @@ class EventRepositoryPort(Protocol):
 
     def list(self, query: EventQuery) -> EventPage: ...
 
+    def snapshot(self) -> AbstractContextManager[EventRepositoryPort]:
+        """One consistent read view; separate requests may observe newer data."""
+        ...
+
+    def find_process_ids(self, keys: tuple[ProcessKey, ...], *, field: str, limit: int) -> tuple[str, ...]: ...
+
+    def find_instances_events(self, ids: tuple[str, ...], *, limit: int) -> tuple[Event, ...]: ...
+
     def find_instance_events(self, process_instance_id: str, *, limit: int) -> tuple[Event, ...]:
         """События одного экземпляра процесса, от ранних к поздним (§14).
 
@@ -114,6 +125,7 @@ class EventRepositoryPort(Protocol):
     def find_process_instance(
         self,
         *,
+        host_id: str,
         boot_id: str | None,
         pid: int,
         before: datetime,

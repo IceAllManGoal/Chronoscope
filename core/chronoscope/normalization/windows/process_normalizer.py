@@ -128,6 +128,9 @@ def _resolve_parent(
     parent_pid = attributes.get("parent_pid")
     if parent_pid is None:
         return None
+    if parent_pid == attributes.get("pid"):
+        attributes[ATTRIBUTE_PARENT_RESOLVED] = False
+        return None
 
     # Граница поиска — время старта потомка, а не время текущего события.
     #
@@ -137,6 +140,7 @@ def _resolve_parent(
     # потомка, — то есть в ``actor`` попал бы чужой экземпляр. Это не неточность, а
     # утверждение, которого в наблюдениях не было (§14, §20).
     parent = context.find_process_instance(
+        host_id=raw_event.host_id,
         boot_id=raw_event.boot_id,
         pid=parent_pid,
         before=child_started_at,

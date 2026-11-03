@@ -17,7 +17,7 @@ from chronoscope.application.ports import (
 from chronoscope.application.queries.get_event import GetEvent
 from chronoscope.application.queries.list_events import ListEvents
 from chronoscope.domain.errors import InvalidInputError
-from chronoscope.domain.validation import require_utc
+from chronoscope.domain.validation import require_utc, PREFIXED_ID_RE
 
 router = APIRouter(tags=["events"])
 
@@ -61,6 +61,8 @@ def list_events(
     source: str | None = Query(None, description="Источник события, например windows.process"),
     actor_id: str | None = Query(None, description="Идентификатор сущности-актора"),
     subject_id: str | None = Query(None, description="Идентификатор сущности-субъекта"),
+    entity_id: str | None = Query(None, pattern=PREFIXED_ID_RE.pattern,
+                                 description="Сохранённая ссылка actor OR subject; не причинность"),
     from_: datetime | None = Query(None, alias="from", description="Начало периода, включительно"),
     to: datetime | None = Query(None, description="Конец периода, включительно"),
     use_case: ListEvents = Depends(get_list_events),
@@ -72,6 +74,7 @@ def list_events(
         source=source,
         actor_id=actor_id,
         subject_id=subject_id,
+        entity_id=entity_id,
         time_from=_as_utc(from_, "from"),
         time_to=_as_utc(to, "to"),
     )
